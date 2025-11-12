@@ -82,6 +82,10 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     implementation("org.tensorflow:tensorflow-lite-metadata:0.4.4")
     
+    // AutoValue (required by TensorFlow Lite Support for R8/ProGuard)
+    implementation("com.google.auto.value:auto-value-annotations:1.10.4")
+    compileOnly("com.google.auto.value:auto-value:1.10.4")
+    
     // Room Database
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
