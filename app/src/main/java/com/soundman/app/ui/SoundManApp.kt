@@ -8,9 +8,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.ExperimentalMaterial3Api
 import com.soundman.app.ui.components.*
 import com.soundman.app.viewmodel.SoundDetectionViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SoundManApp(
     viewModel: SoundDetectionViewModel,

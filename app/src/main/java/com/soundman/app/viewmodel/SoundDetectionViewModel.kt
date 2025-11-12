@@ -16,10 +16,10 @@ class SoundDetectionViewModel(application: Application) : AndroidViewModel(appli
     private val detectionService = SoundDetectionService(application)
     private val database = SoundDatabase.getDatabase(application)
 
-    val isDetecting: StateFlow<Boolean> = detectionService.isDetecting.asStateFlow()
+    val isDetecting: StateFlow<Boolean> = detectionService.isDetecting
     val currentDetection: StateFlow<com.soundman.app.data.SoundDetection?> = 
-        detectionService.currentDetection.asStateFlow()
-    val unknownSoundCount: StateFlow<Int> = detectionService.unknownSoundCount.asStateFlow()
+        detectionService.currentDetection
+    val unknownSoundCount: StateFlow<Int> = detectionService.unknownSoundCount
 
     val soundLabels = database.soundLabelDao().getAllLabels()
     val personLabels = database.personLabelDao().getAllPersons()

@@ -89,7 +89,7 @@ class SoundDetectionService(private val context: Context) {
                 database.soundDetectionDao().insertDetection(detection)
             } else if (result.label != null) {
                 // Known sound detected
-                val label = if (result.isPerson) {
+                val label: Any? = if (result.isPerson) {
                     personLabels.find { it.id == result.personId }
                 } else {
                     soundLabels.find { it.name == result.label }

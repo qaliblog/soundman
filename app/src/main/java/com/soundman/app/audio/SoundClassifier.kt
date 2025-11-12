@@ -121,9 +121,9 @@ class SoundClassifier(private val context: Context) {
         features.add(zcr.toFloat() / floatSamples.size)
 
         // 3. Spectral Centroid (simplified)
-        val fftSize = min(1024, floatSamples.size)
+        val fftSize = kotlin.math.min(1024, floatSamples.size)
         val fftData = FloatArray(fftSize)
-        System.arraycopy(floatSamples, 0, fftData, 0, min(fftSize, floatSamples.size))
+        System.arraycopy(floatSamples, 0, fftData, 0, kotlin.math.min(fftSize, floatSamples.size))
         
         // Simple spectral features
         val spectralCentroid = calculateSpectralCentroid(fftData)
