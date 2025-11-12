@@ -77,10 +77,7 @@ dependencies {
     // Audio Processing
     implementation("androidx.media3:media3-exoplayer:1.2.0")
     
-    // ML Kit for sound classification (using custom implementation instead)
-    // Note: ML Kit audio classification is not available, using custom sound classifier
-    
-    // TensorFlow Lite for custom models
+    // TensorFlow Lite for custom models (optional, for future ML enhancements)
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     implementation("org.tensorflow:tensorflow-lite-metadata:0.4.4")
