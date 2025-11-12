@@ -97,7 +97,7 @@ class SoundDetectionService(private val context: Context) {
 
                 if (label != null) {
                     val detection = SoundDetection(
-                        labelId = if (result.isPerson) null else (label as SoundLabel).id,
+                        labelId = if (result.isPerson) null else (label as? SoundLabel)?.id,
                         labelName = result.label,
                         confidence = result.confidence,
                         audioData = audioData,
@@ -135,7 +135,11 @@ class SoundDetectionService(private val context: Context) {
 
                     // Save to database
                     database.soundDetectionDao().insertDetection(detection)
+                } else {
+                    // Label not found
                 }
+            } else {
+                // No action needed for other cases
             }
         } catch (e: Exception) {
             Log.e("SoundDetectionService", "Error processing audio chunk", e)

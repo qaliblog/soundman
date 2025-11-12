@@ -58,14 +58,20 @@ class AudioProcessor(
                     if (AcousticEchoCanceler.isAvailable()) {
                         acousticEchoCanceler = AcousticEchoCanceler.create(sessionId)
                         acousticEchoCanceler?.enabled = true
+                    } else {
+                        // AcousticEchoCanceler not available
                     }
                     if (AutomaticGainControl.isAvailable()) {
                         automaticGainControl = AutomaticGainControl.create(sessionId)
                         automaticGainControl?.enabled = true
+                    } else {
+                        // AutomaticGainControl not available
                     }
                     if (NoiseSuppressor.isAvailable()) {
                         noiseSuppressor = NoiseSuppressor.create(sessionId)
                         noiseSuppressor?.enabled = true
+                    } else {
+                        // NoiseSuppressor not available
                     }
                 } catch (e: Exception) {
                     Log.e("AudioProcessor", "Error setting up audio effects", e)
