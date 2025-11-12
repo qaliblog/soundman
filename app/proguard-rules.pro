@@ -5,6 +5,3 @@
 # Keep TensorFlow Lite
 -keep class org.tensorflow.lite.** { *; }
 -keep class org.tensorflow.lite.support.** { *; }
-
-# Keep ML Kit
--keep class com.google.mlkit.** { *; }
