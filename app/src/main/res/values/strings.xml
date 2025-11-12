@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SoundMan</string>
+    <string name="start_detection">Start Detection</string>
+    <string name="stop_detection">Stop Detection</string>
+    <string name="unknown_sound">Unknown Sound</string>
+    <string name="label_sound">Label Sound</string>
+    <string name="detection_confidence">Confidence: %1$d%%</string>
+    <string name="volume_control">Volume Control</string>
+    <string name="reverse_tone">Reverse Tone</string>
+    <string name="amplify">Amplify</string>
+    <string name="mute">Mute</string>
+    <string name="person_detected">Person Detected</string>
+    <string name="label_person">Label Person</string>
+    <string name="audio_permission_required">Audio recording permission is required for sound detection</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="sound_history">Sound History</string>
+    <string name="settings">Settings</string>
+    <string name="no_sounds_detected">No sounds detected yet</string>
+    <string name="detection_active">Detection Active</string>
+    <string name="detection_inactive">Detection Inactive</string>
+</resources>
