@@ -73,10 +73,14 @@ class SoundDetectionService(private val context: Context) {
     private suspend fun initializeClassifiers() = withContext(Dispatchers.IO) {
         try {
             mediaPipeClassifier.initialize()
+            val isMediaPipeReady = mediaPipeClassifier.isInitialized()
+            Log.d("SoundDetectionService", "MediaPipe initialized: $isMediaPipeReady (buffer: ${mediaPipeClassifier.getBufferSize()}/${mediaPipeClassifier.getRequiredSamples()})")
+            
             voskRecognizer.initialize(currentLanguage)
             Log.d("SoundDetectionService", "Classifiers initialized")
         } catch (e: Exception) {
             Log.e("SoundDetectionService", "Error initializing classifiers", e)
+            e.printStackTrace()
         }
     }
 

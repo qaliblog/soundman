@@ -257,6 +257,21 @@ class MediaPipeSoundClassifier(private val context: Context) {
 
         return floatSamples
     }
+    
+    private fun resampleAudio(input: FloatArray, inputRate: Int, outputRate: Int): FloatArray {
+        if (inputRate == outputRate) return input
+        
+        val ratio = inputRate.toFloat() / outputRate.toFloat()
+        val outputSize = (input.size / ratio).toInt()
+        val output = FloatArray(outputSize)
+        
+        for (i in output.indices) {
+            val srcIndex = (i * ratio).toInt().coerceAtMost(input.size - 1)
+            output[i] = input[srcIndex]
+        }
+        
+        return output
+    }
 
     private fun extractFrequency(audioData: FloatArray, sampleRate: Int): Float {
         if (audioData.isEmpty()) return 0f
@@ -334,5 +349,12 @@ class MediaPipeSoundClassifier(private val context: Context) {
         audioClassifier?.close()
         audioClassifier = null
         isInitialized = false
+        audioBuffer.clear()
     }
+    
+    fun isInitialized(): Boolean = isInitialized
+    
+    fun getBufferSize(): Int = audioBuffer.size
+    
+    fun getRequiredSamples(): Int = requiredSamples
 }
