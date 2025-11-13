@@ -109,17 +109,31 @@ jobs:
           echo "Checking model structure:"
           find . -name "am" -type f | head -5
           
-          # Verify at least English model exists (check for am file in any en directory)
-          if [ -f "vosk-model-small-en-us-0.15/am" ]; then
-            echo "English model verified: vosk-model-small-en-us-0.15/am exists"
+          # Verify at least English model exists
+          EN_AM=$(find "vosk-model-small-en-us-0.15" -name "am" -type f 2>/dev/null | head -1)
+          if [ -n "$EN_AM" ] && [ -f "$EN_AM" ]; then
+            echo "English model verified: $EN_AM exists"
           else
             # Try to find English model in any directory
-            EN_AM=$(find . -name "am" -path "*/en*" | head -1)
-            if [ -n "$EN_AM" ]; then
+            EN_AM=$(find . -name "am" -type f | grep -i "en" | head -1)
+            if [ -n "$EN_AM" ] && [ -f "$EN_AM" ]; then
               echo "English model found at: $EN_AM"
             else
               echo "Error: English model not found or incomplete"
+              echo "Directory contents:"
+              ls -la vosk-model-small-en-us-0.15/ 2>/dev/null || echo "Directory not found"
+              find . -type f -name "*.fst" -o -name "*.conf" | head -5
               exit 1
+            fi
+          fi
+          
+          # Verify Persian model if it exists
+          if [ -d "vosk-model-small-fa-0.42" ]; then
+            FA_AM=$(find "vosk-model-small-fa-0.42" -name "am" -type f 2>/dev/null | head -1)
+            if [ -n "$FA_AM" ] && [ -f "$FA_AM" ]; then
+              echo "Persian model verified: $FA_AM exists"
+            else
+              echo "Warning: Persian model directory exists but am file not found"
             fi
           fi
 
