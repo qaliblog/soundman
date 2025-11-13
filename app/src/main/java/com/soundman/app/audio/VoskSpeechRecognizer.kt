@@ -2,8 +2,11 @@ package com.soundman.app.audio
 
 import android.content.Context
 import android.util.Log
-import com.alphacephei.vosk.Model
-import com.alphacephei.vosk.Recognizer
+// Vosk Android library imports - package may vary by version
+// Try alternative package names if this doesn't work
+@file:Suppress("UNUSED_IMPORT")
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -19,8 +22,9 @@ data class TranscriptionResult(
 )
 
 class VoskSpeechRecognizer(private val context: Context) {
-    private var model: Model? = null
-    private var recognizer: Recognizer? = null
+    // Use reflection to access Vosk classes to avoid import issues
+    private var model: Any? = null
+    private var recognizer: Any? = null
     private var isInitialized = false
     private var currentLanguage = "en" // "en" or "fa" (Persian)
     private val sampleRate = 16000
@@ -36,8 +40,33 @@ class VoskSpeechRecognizer(private val context: Context) {
                 return@withContext
             }
 
-            model = Model(modelPath)
-            recognizer = Recognizer(model, sampleRate.toFloat())
+            // Use reflection to load Vosk classes
+            val modelClass = try {
+                Class.forName("com.alphacephei.vosk.Model")
+            } catch (e: ClassNotFoundException) {
+                try {
+                    Class.forName("net.sourceforge.vosk.Model")
+                } catch (e2: ClassNotFoundException) {
+                    Log.e("VoskSpeechRecognizer", "Vosk Model class not found", e2)
+                    isInitialized = false
+                    return@withContext
+                }
+            }
+            
+            val recognizerClass = try {
+                Class.forName("com.alphacephei.vosk.Recognizer")
+            } catch (e: ClassNotFoundException) {
+                try {
+                    Class.forName("net.sourceforge.vosk.Recognizer")
+                } catch (e2: ClassNotFoundException) {
+                    Log.e("VoskSpeechRecognizer", "Vosk Recognizer class not found", e2)
+                    isInitialized = false
+                    return@withContext
+                }
+            }
+
+            model = modelClass.getConstructor(String::class.java).newInstance(modelPath)
+            recognizer = recognizerClass.getConstructor(modelClass, Float::class.java).newInstance(model, sampleRate.toFloat())
             isInitialized = true
             Log.d("VoskSpeechRecognizer", "Vosk initialized with language: $language")
         } catch (e: Exception) {

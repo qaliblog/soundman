@@ -164,7 +164,8 @@ class SoundDetectionService(private val context: Context) {
         if (person == null) return@withContext
 
         // Get or assign person label (Person01, Person02, etc.)
-        val personLabelName = personIdMap.getOrPut(result.personId) {
+        val personId = result.personId ?: return@withContext
+        val personLabelName = personIdMap.getOrPut(personId) {
             val labelName = "Person%02d".format(nextPersonId++)
             // Update person name if not already set
             if (person.name.startsWith("Person")) {
@@ -213,7 +214,7 @@ class SoundDetectionService(private val context: Context) {
         }
 
         // Update detection count
-        database.personLabelDao().incrementDetectionCount(result.personId!!)
+        database.personLabelDao().incrementDetectionCount(personId)
         database.soundDetectionDao().insertDetection(detection)
     }
 
