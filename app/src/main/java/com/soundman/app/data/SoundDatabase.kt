@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [SoundLabel::class, PersonLabel::class, SoundDetection::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class SoundDatabase : RoomDatabase() {

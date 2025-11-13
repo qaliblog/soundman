@@ -12,5 +12,7 @@ data class PersonLabel(
     val volumeMultiplier: Float = 1.0f,
     val isMuted: Boolean = false,
     val detectionCount: Int = 0,
+    val isActive: Boolean = true,
+    val transcription: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

@@ -13,5 +13,7 @@ data class SoundLabel(
     val volumeMultiplier: Float = 1.0f,
     val isMuted: Boolean = false,
     val reverseToneEnabled: Boolean = false,
+    val isActive: Boolean = true,
+    val isRecording: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )

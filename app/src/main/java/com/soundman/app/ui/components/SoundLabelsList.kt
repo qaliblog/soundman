@@ -15,7 +15,9 @@ import com.soundman.app.data.SoundLabel
 @Composable
 fun SoundLabelsList(
     soundLabels: List<SoundLabel>,
-    onSettingsClick: (SoundLabel) -> Unit
+    onSettingsClick: (SoundLabel) -> Unit,
+    onToggleActive: ((Long, Boolean) -> Unit)? = null,
+    onToggleRecording: ((Long, Boolean) -> Unit)? = null
 ) {
     if (soundLabels.isEmpty()) {
         Box(
@@ -35,7 +37,9 @@ fun SoundLabelsList(
             items(soundLabels) { label ->
                 SoundLabelCard(
                     label = label,
-                    onSettingsClick = { onSettingsClick(label) }
+                    onSettingsClick = { onSettingsClick(label) },
+                    onToggleActive = onToggleActive,
+                    onToggleRecording = onToggleRecording
                 )
             }
         }
@@ -45,7 +49,9 @@ fun SoundLabelsList(
 @Composable
 fun SoundLabelCard(
     label: SoundLabel,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onToggleActive: ((Long, Boolean) -> Unit)? = null,
+    onToggleRecording: ((Long, Boolean) -> Unit)? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -84,6 +90,29 @@ fun SoundLabelCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (onToggleActive != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Active", style = MaterialTheme.typography.bodySmall)
+                            Switch(
+                                checked = label.isActive,
+                                onCheckedChange = { onToggleActive(label.id, it) }
+                            )
+                        }
+                    }
+                    if (onToggleRecording != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Recording", style = MaterialTheme.typography.bodySmall)
+                            Switch(
+                                checked = label.isRecording,
+                                onCheckedChange = { onToggleRecording(label.id, it) }
+                            )
+                        }
+                    }
                 }
             }
             IconButton(onClick = onSettingsClick) {

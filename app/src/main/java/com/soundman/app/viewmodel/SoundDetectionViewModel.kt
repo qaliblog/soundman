@@ -22,6 +22,8 @@ class SoundDetectionViewModel(application: Application) : AndroidViewModel(appli
     val unknownSoundCount: StateFlow<Int> = detectionService.unknownSoundCount
 
     val soundLabels = database.soundLabelDao().getAllLabels()
+    val activeSoundLabels = database.soundLabelDao().getActiveLabels()
+    val inactiveSoundLabels = database.soundLabelDao().getInactiveLabels()
     val personLabels = database.personLabelDao().getAllPersons()
     val recentDetections = database.soundDetectionDao().getRecentDetections(50)
 
@@ -53,14 +55,18 @@ class SoundDetectionViewModel(application: Application) : AndroidViewModel(appli
         labelId: Long,
         volumeMultiplier: Float,
         isMuted: Boolean,
-        reverseToneEnabled: Boolean
+        reverseToneEnabled: Boolean,
+        isActive: Boolean? = null,
+        isRecording: Boolean? = null
     ) {
         viewModelScope.launch {
             detectionService.updateSoundLabelSettings(
                 labelId,
                 volumeMultiplier,
                 isMuted,
-                reverseToneEnabled
+                reverseToneEnabled,
+                isActive,
+                isRecording
             )
         }
     }
@@ -68,13 +74,15 @@ class SoundDetectionViewModel(application: Application) : AndroidViewModel(appli
     fun updatePersonSettings(
         personId: Long,
         volumeMultiplier: Float,
-        isMuted: Boolean
+        isMuted: Boolean,
+        isActive: Boolean? = null
     ) {
         viewModelScope.launch {
             detectionService.updatePersonSettings(
                 personId,
                 volumeMultiplier,
-                isMuted
+                isMuted,
+                isActive
             )
         }
     }
@@ -89,5 +97,29 @@ class SoundDetectionViewModel(application: Application) : AndroidViewModel(appli
 
     suspend fun getUnknownSoundClusters(): List<com.soundman.app.data.SoundDetection> {
         return detectionService.getUnknownSoundClusters()
+    }
+
+    fun toggleSoundActive(labelId: Long, isActive: Boolean) {
+        viewModelScope.launch {
+            detectionService.toggleSoundActive(labelId, isActive)
+        }
+    }
+
+    fun toggleSoundRecording(labelId: Long, isRecording: Boolean) {
+        viewModelScope.launch {
+            detectionService.toggleSoundRecording(labelId, isRecording)
+        }
+    }
+
+    fun togglePersonActive(personId: Long, isActive: Boolean) {
+        viewModelScope.launch {
+            detectionService.togglePersonActive(personId, isActive)
+        }
+    }
+
+    fun setTranscriptionLanguage(language: String) {
+        viewModelScope.launch {
+            detectionService.setTranscriptionLanguage(language)
+        }
     }
 }

@@ -25,4 +25,16 @@ interface SoundLabelDao {
 
     @Query("UPDATE sound_labels SET detectionCount = detectionCount + 1 WHERE id = :id")
     suspend fun incrementDetectionCount(id: Long)
+
+    @Query("SELECT * FROM sound_labels WHERE isActive = 1 ORDER BY name ASC")
+    fun getActiveLabels(): Flow<List<SoundLabel>>
+
+    @Query("SELECT * FROM sound_labels WHERE isActive = 0 ORDER BY name ASC")
+    fun getInactiveLabels(): Flow<List<SoundLabel>>
+
+    @Query("UPDATE sound_labels SET isActive = :isActive WHERE id = :id")
+    suspend fun setActive(id: Long, isActive: Boolean)
+
+    @Query("UPDATE sound_labels SET isRecording = :isRecording WHERE id = :id")
+    suspend fun setRecording(id: Long, isRecording: Boolean)
 }

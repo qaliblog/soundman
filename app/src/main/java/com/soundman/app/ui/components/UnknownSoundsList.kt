@@ -134,15 +134,29 @@ fun UnknownSoundItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Unknown Sound",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = formatTimestamp(detection.timestamp),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+                    Text(
+                        text = "Unknown Sound",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = formatTimestamp(detection.timestamp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (detection.frequency != null) {
+                        Text(
+                            text = "Frequency: ${String.format("%.1f", detection.frequency)} Hz",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (detection.duration != null) {
+                        Text(
+                            text = "Duration: ${detection.duration}ms",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
         }
         
         TextButton(

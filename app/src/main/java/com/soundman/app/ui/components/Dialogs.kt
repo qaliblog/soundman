@@ -117,11 +117,13 @@ fun LabelDialog(
 fun SoundSettingsDialog(
     soundLabel: SoundLabel,
     onDismiss: () -> Unit,
-    onSave: (Float, Boolean, Boolean) -> Unit
+    onSave: (Float, Boolean, Boolean, Boolean?, Boolean?) -> Unit
 ) {
     var volume by remember { mutableStateOf(soundLabel.volumeMultiplier) }
     var isMuted by remember { mutableStateOf(soundLabel.isMuted) }
     var reverseTone by remember { mutableStateOf(soundLabel.reverseToneEnabled) }
+    var isActive by remember { mutableStateOf(soundLabel.isActive) }
+    var isRecording by remember { mutableStateOf(soundLabel.isRecording) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -153,10 +155,26 @@ fun SoundSettingsDialog(
                     Text("Reverse Tone (Noise Cancellation)")
                     Switch(checked = reverseTone, onCheckedChange = { reverseTone = it })
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Active")
+                    Switch(checked = isActive, onCheckedChange = { isActive = it })
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Recording")
+                    Switch(checked = isRecording, onCheckedChange = { isRecording = it })
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(volume, isMuted, reverseTone) }) {
+            TextButton(onClick = { onSave(volume, isMuted, reverseTone, isActive, isRecording) }) {
                 Text("Save")
             }
         },

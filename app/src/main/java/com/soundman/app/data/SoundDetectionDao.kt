@@ -14,7 +14,7 @@ interface SoundDetectionDao {
     @Query("SELECT * FROM sound_detections WHERE clusterId = :clusterId ORDER BY timestamp DESC")
     fun getDetectionsByCluster(clusterId: String): Flow<List<SoundDetection>>
 
-    @Query("SELECT * FROM sound_detections WHERE labelName IS NULL AND clusterId IS NOT NULL ORDER BY timestamp DESC")
+    @Query("SELECT * FROM sound_detections WHERE labelName IS NULL AND clusterId IS NOT NULL ORDER BY frequency ASC, duration ASC")
     fun getUnknownSoundClusters(): Flow<List<SoundDetection>>
 
     @Query("SELECT * FROM sound_detections WHERE id = :id")
@@ -28,4 +28,7 @@ interface SoundDetectionDao {
 
     @Query("DELETE FROM sound_detections WHERE timestamp < :beforeTimestamp")
     suspend fun deleteOldDetections(beforeTimestamp: Long)
+
+    @Query("SELECT * FROM sound_detections WHERE clusterId = :clusterId ORDER BY frequency ASC, duration ASC")
+    suspend fun getDetectionsByClusterSorted(clusterId: String): List<SoundDetection>
 }

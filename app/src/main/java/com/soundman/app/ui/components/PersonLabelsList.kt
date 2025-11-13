@@ -15,7 +15,8 @@ import com.soundman.app.data.PersonLabel
 @Composable
 fun PersonLabelsList(
     personLabels: List<PersonLabel>,
-    onSettingsClick: (PersonLabel) -> Unit
+    onSettingsClick: (PersonLabel) -> Unit,
+    onToggleActive: ((Long, Boolean) -> Unit)? = null
 ) {
     if (personLabels.isEmpty()) {
         Box(
@@ -35,7 +36,8 @@ fun PersonLabelsList(
             items(personLabels) { person ->
                 PersonLabelCard(
                     person = person,
-                    onSettingsClick = { onSettingsClick(person) }
+                    onSettingsClick = { onSettingsClick(person) },
+                    onToggleActive = onToggleActive
                 )
             }
         }
@@ -45,7 +47,8 @@ fun PersonLabelsList(
 @Composable
 fun PersonLabelCard(
     person: PersonLabel,
-    onSettingsClick: () -> Unit
+    onSettingsClick: () -> Unit,
+    onToggleActive: ((Long, Boolean) -> Unit)? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -77,6 +80,29 @@ fun PersonLabelCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
+                }
+                if (!person.transcription.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Transcription:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = person.transcription ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (onToggleActive != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Active", style = MaterialTheme.typography.bodySmall)
+                        Switch(
+                            checked = person.isActive,
+                            onCheckedChange = { onToggleActive(person.id, it) }
+                        )
+                    }
                 }
             }
             IconButton(onClick = onSettingsClick) {

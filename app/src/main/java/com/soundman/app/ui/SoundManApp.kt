@@ -3,6 +3,7 @@ package com.soundman.app.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,8 +23,13 @@ fun SoundManApp(
     val currentDetection by viewModel.currentDetection.collectAsState()
     val unknownSoundCount by viewModel.unknownSoundCount.collectAsState()
     val soundLabels by viewModel.soundLabels.collectAsState(initial = emptyList())
+    val activeSoundLabels by viewModel.activeSoundLabels.collectAsState(initial = emptyList())
+    val inactiveSoundLabels by viewModel.inactiveSoundLabels.collectAsState(initial = emptyList())
     val personLabels by viewModel.personLabels.collectAsState(initial = emptyList())
     val isLiveMicEnabled by viewModel.isLiveMicEnabled.collectAsState()
+    
+    var showLanguageSettings by remember { mutableStateOf(false) }
+    var selectedLanguage by remember { mutableStateOf("en") }
 
     var showLabelDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf<Any?>(null) }
@@ -45,8 +51,8 @@ fun SoundManApp(
             TopAppBar(
                 title = { Text("SoundMan") },
                 actions = {
-                    IconButton(onClick = { selectedTab = 1 }) {
-                        Icon(Icons.Default.History, contentDescription = "History")
+                    IconButton(onClick = { showLanguageSettings = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Language Settings")
                     }
                 }
             )
@@ -159,16 +165,21 @@ fun SoundManApp(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Sounds") }
+                    text = { Text("Active Sounds") }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("People") }
+                    text = { Text("Inactive Sounds") }
                 )
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
+                    text = { Text("People") }
+                )
+                Tab(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     text = { 
                         Row {
                             Text("Unknown")
@@ -186,14 +197,23 @@ fun SoundManApp(
             // Content
             when (selectedTab) {
                 0 -> SoundLabelsList(
-                    soundLabels = soundLabels,
-                    onSettingsClick = { showSettingsDialog = it }
+                    soundLabels = activeSoundLabels,
+                    onSettingsClick = { showSettingsDialog = it },
+                    onToggleActive = { id, active -> viewModel.toggleSoundActive(id, active) },
+                    onToggleRecording = { id, recording -> viewModel.toggleSoundRecording(id, recording) }
                 )
-                1 -> PersonLabelsList(
+                1 -> SoundLabelsList(
+                    soundLabels = inactiveSoundLabels,
+                    onSettingsClick = { showSettingsDialog = it },
+                    onToggleActive = { id, active -> viewModel.toggleSoundActive(id, active) },
+                    onToggleRecording = { id, recording -> viewModel.toggleSoundRecording(id, recording) }
+                )
+                2 -> PersonLabelsList(
                     personLabels = personLabels,
-                    onSettingsClick = { showSettingsDialog = it }
+                    onSettingsClick = { showSettingsDialog = it },
+                    onToggleActive = { id, active -> viewModel.togglePersonActive(id, active) }
                 )
-                2 -> UnknownSoundsList(
+                3 -> UnknownSoundsList(
                     unknownSoundClusters = unknownSoundClusters,
                     onLabelClick = { detection, _, _ ->
                         selectedDetectionForLabel = detection
@@ -233,12 +253,14 @@ fun SoundManApp(
             SoundSettingsDialog(
                 soundLabel = settings,
                 onDismiss = { showSettingsDialog = null },
-                onSave = { volume, muted, reverseTone ->
+                onSave = { volume, muted, reverseTone, isActive, isRecording ->
                     viewModel.updateSoundLabelSettings(
                         settings.id,
                         volume,
                         muted,
-                        reverseTone
+                        reverseTone,
+                        isActive,
+                        isRecording
                     )
                     showSettingsDialog = null
                 }
@@ -252,11 +274,76 @@ fun SoundManApp(
                     viewModel.updatePersonSettings(
                         settings.id,
                         volume,
-                        muted
+                        muted,
+                        null
                     )
                     showSettingsDialog = null
                 }
             )
         }
+    }
+
+    // Language Settings Dialog
+    if (showLanguageSettings) {
+        AlertDialog(
+            onDismissRequest = { showLanguageSettings = false },
+            title = { Text("Transcription Language") },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Select language for speech transcription:")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = selectedLanguage == "en",
+                                onClick = { selectedLanguage = "en" }
+                            )
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedLanguage == "en",
+                            onClick = { selectedLanguage = "en" }
+                        )
+                        Text("English", modifier = Modifier.padding(start = 8.dp))
+                    }
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = selectedLanguage == "fa",
+                                onClick = { selectedLanguage = "fa" }
+                            )
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = selectedLanguage == "fa",
+                            onClick = { selectedLanguage = "fa" }
+                        )
+                        Text("Persian (فارسی)", modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.setTranscriptionLanguage(selectedLanguage)
+                        showLanguageSettings = false
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLanguageSettings = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

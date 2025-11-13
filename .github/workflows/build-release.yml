@@ -34,6 +34,29 @@ jobs:
           fi
           chmod +x gradlew
 
+      - name: Download Vosk Models
+        run: |
+          mkdir -p app/src/main/assets/vosk_models
+          cd app/src/main/assets/vosk_models
+          
+          # Download and extract English model
+          echo "Downloading English Vosk model..."
+          curl -L -o en_model.zip "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+          unzip -q en_model.zip
+          # Keep the directory structure as extracted
+          rm en_model.zip
+          
+          # Download and extract Persian model
+          echo "Downloading Persian Vosk model..."
+          curl -L -o fa_model.zip "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.22.zip"
+          unzip -q fa_model.zip
+          rm fa_model.zip
+          
+          echo "Vosk models downloaded successfully"
+          ls -la
+          echo "Checking model structure:"
+          find . -name "am" -type f | head -5
+
       - name: Clean build
         run: ./gradlew clean
 

@@ -1,3 +1,9 @@
+import java.net.URL
+import java.util.zip.ZipInputStream
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -48,6 +54,93 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.4"
     }
+
+    sourceSets {
+        getByName("main") {
+            assets.srcDirs("src/main/assets")
+        }
+    }
+}
+
+// Task to download and extract Vosk models
+tasks.register("downloadVoskModels") {
+    doLast {
+        val assetsDir = file("src/main/assets/vosk_models")
+        assetsDir.mkdirs()
+
+        val models = mapOf(
+            "en" to "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
+            "fa" to "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.22.zip"
+        )
+
+        models.forEach { (lang, url) ->
+            val modelName = when (lang) {
+                "en" -> "vosk-model-small-en-us-0.15"
+                "fa" -> "vosk-model-small-fa-0.22"
+                else -> "vosk-model-small-$lang"
+            }
+            val modelDir = File(assetsDir, modelName)
+            if (modelDir.exists() && File(modelDir, "am").exists()) {
+                println("Model for $lang already exists, skipping download")
+                return@forEach
+            }
+
+            println("Downloading Vosk model for $lang from $url")
+            val zipFile = File(assetsDir, "${lang}_model.zip")
+            
+            try {
+                URL(url).openStream().use { input ->
+                    FileOutputStream(zipFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                println("Downloaded ${lang}_model.zip")
+
+                // Extract zip file
+                println("Extracting ${lang}_model.zip")
+                ZipInputStream(FileInputStream(zipFile)).use { zip ->
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        // Remove the top-level folder name from the path
+                        val entryPath = entry.name
+                        val relativePath = if (entryPath.contains("/")) {
+                            entryPath.substring(entryPath.indexOf("/") + 1)
+                        } else {
+                            entryPath
+                        }
+                        
+                        if (relativePath.isEmpty()) {
+                            entry = zip.nextEntry
+                            continue
+                        }
+                        
+                        val entryFile = File(modelDir, relativePath)
+                        if (entry.isDirectory) {
+                            entryFile.mkdirs()
+                        } else {
+                            entryFile.parentFile.mkdirs()
+                            FileOutputStream(entryFile).use { output ->
+                                zip.copyTo(output)
+                            }
+                        }
+                        entry = zip.nextEntry
+                    }
+                }
+                println("Extracted model for $lang to $modelDir")
+                
+                // Clean up zip file
+                zipFile.delete()
+            } catch (e: Exception) {
+                println("Error downloading/extracting model for $lang: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+}
+
+// Make sure models are downloaded before building
+tasks.named("preBuild").configure {
+    dependsOn("downloadVoskModels")
 }
 
 dependencies {
@@ -77,6 +170,13 @@ dependencies {
     // Audio Processing
     implementation("androidx.media3:media3-exoplayer:1.2.0")
     
+    // MediaPipe
+    implementation("com.google.mediapipe:tasks-audio:0.10.8")
+    implementation("com.google.mediapipe:tasks-core:0.10.8")
+    
+    // Vosk Speech Recognition
+    implementation("com.alphacephei:vosk-android:0.3.47")
+    
     // TensorFlow Lite for custom models (optional, for future ML enhancements)
     implementation("org.tensorflow:tensorflow-lite:2.14.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
@@ -96,6 +196,9 @@ dependencies {
     
     // Permissions
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
+    
+    // Zip extraction for model download
+    implementation("org.apache.commons:commons-compress:1.24.0")
     
     // Testing
     testImplementation("junit:junit:4.13.2")

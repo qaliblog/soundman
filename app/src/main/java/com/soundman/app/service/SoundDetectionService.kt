@@ -2,9 +2,15 @@ package com.soundman.app.service
 
 import android.content.Context
 import android.util.Log
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import com.soundman.app.audio.AudioOutputProcessor
 import com.soundman.app.audio.AudioProcessor
-import com.soundman.app.audio.SoundClassifier
+import com.soundman.app.audio.MediaPipeSoundClassifier
+import com.soundman.app.audio.VoskSpeechRecognizer
 import com.soundman.app.data.SoundDatabase
 import com.soundman.app.data.SoundDetection
 import com.soundman.app.data.SoundLabel
@@ -16,12 +22,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
+
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+private val LANGUAGE_KEY = stringPreferencesKey("transcription_language")
 
 class SoundDetectionService(private val context: Context) {
     private val audioProcessor = AudioProcessor()
-    private val soundClassifier = SoundClassifier(context)
+    private val mediaPipeClassifier = MediaPipeSoundClassifier(context)
+    private val voskRecognizer = VoskSpeechRecognizer(context)
     private val audioOutputProcessor = AudioOutputProcessor()
     private val database = SoundDatabase.getDatabase(context)
+    
+    private var nextPersonId = 1L
+    private val personIdMap = mutableMapOf<Long, String>() // Maps personId to Person01, Person02, etc.
 
     private val _isDetecting = MutableStateFlow(false)
     val isDetecting: StateFlow<Boolean> = _isDetecting.asStateFlow()
@@ -36,6 +50,47 @@ class SoundDetectionService(private val context: Context) {
     val isLiveMicEnabled: StateFlow<Boolean> = _isLiveMicEnabled.asStateFlow()
 
     private val scope = CoroutineScope(Dispatchers.Default)
+    
+    private var currentLanguage = "en"
+
+    init {
+        scope.launch {
+            loadLanguagePreference()
+            initializeClassifiers()
+        }
+    }
+
+    private suspend fun loadLanguagePreference() = withContext(Dispatchers.IO) {
+        try {
+            val prefs = context.dataStore.data.first()
+            currentLanguage = prefs[LANGUAGE_KEY] ?: "en"
+        } catch (e: Exception) {
+            Log.e("SoundDetectionService", "Error loading language preference", e)
+            currentLanguage = "en"
+        }
+    }
+
+    private suspend fun initializeClassifiers() = withContext(Dispatchers.IO) {
+        try {
+            mediaPipeClassifier.initialize()
+            voskRecognizer.initialize(currentLanguage)
+            Log.d("SoundDetectionService", "Classifiers initialized")
+        } catch (e: Exception) {
+            Log.e("SoundDetectionService", "Error initializing classifiers", e)
+        }
+    }
+
+    suspend fun setTranscriptionLanguage(language: String) = withContext(Dispatchers.IO) {
+        try {
+            context.dataStore.edit { prefs ->
+                prefs[LANGUAGE_KEY] = language
+            }
+            currentLanguage = language
+            voskRecognizer.changeLanguage(language)
+        } catch (e: Exception) {
+            Log.e("SoundDetectionService", "Error setting language", e)
+        }
+    }
 
     suspend fun startDetection() = withContext(Dispatchers.IO) {
         if (_isDetecting.value) return@withContext
@@ -77,92 +132,177 @@ class SoundDetectionService(private val context: Context) {
         try {
             val soundLabels = database.soundLabelDao().getAllLabels().first()
             val personLabels = database.personLabelDao().getAllPersons().first()
+            
+            // Use MediaPipe for classification
+            val result = mediaPipeClassifier.classifySound(
+                audioData,
+                audioProcessor.getSampleRate(),
+                personLabels
+            )
 
-            val result = soundClassifier.classifySound(audioData, soundLabels, personLabels)
-
-            if (result.label == null && result.confidence < 0.3f) {
-                // Unknown sound detected
-                _unknownSoundCount.value = _unknownSoundCount.value + 1
-                
-                val detection = SoundDetection(
-                    labelId = null,
-                    labelName = null,
-                    confidence = result.confidence,
-                    audioData = audioData,
-                    isPerson = false,
-                    clusterId = result.clusterId
-                )
-                _currentDetection.value = detection
-                
-                // Save to database
-                database.soundDetectionDao().insertDetection(detection)
-            } else if (result.label != null) {
+            if (result.isPerson && result.personId != null) {
+                // Person voice detected - use Vosk for transcription
+                processPersonVoice(audioData, result, personLabels)
+            } else if (result.label != null && result.confidence > 0.3f) {
                 // Known sound detected
-                val label: Any? = if (result.isPerson) {
-                    personLabels.find { it.id == result.personId }
-                } else {
-                    soundLabels.find { it.name == result.label }
-                }
-
-                if (label != null) {
-                    val detection = SoundDetection(
-                        labelId = if (result.isPerson) null else (label as? SoundLabel)?.id,
-                        labelName = result.label,
-                        confidence = result.confidence,
-                        audioData = audioData,
-                        isPerson = result.isPerson,
-                        personId = result.personId
-                    )
-                    _currentDetection.value = detection
-
-                    // Process audio output
-                    val processedAudio = if (result.isPerson) {
-                        val personLabel = label as com.soundman.app.data.PersonLabel
-                        audioOutputProcessor.processAudio(
-                            audioData,
-                            null,
-                            isPerson = true,
-                            personVolumeMultiplier = personLabel.volumeMultiplier
-                        )
-                    } else {
-                        audioOutputProcessor.processAudio(
-                            audioData,
-                            label as SoundLabel,
-                            isPerson = false
-                        )
-                    }
-
-                    // Write processed audio to output (unless live mic is enabled)
-                    if (!_isLiveMicEnabled.value) {
-                        audioOutputProcessor.writeAudio(processedAudio)
-                    }
-
-                    // Update detection count
-                    if (result.isPerson) {
-                        result.personId?.let { personId ->
-                            database.personLabelDao().incrementDetectionCount(personId)
-                        }
-                    } else {
-                        (label as? SoundLabel)?.id?.let { labelId ->
-                            database.soundLabelDao().incrementDetectionCount(labelId)
-                        }
-                    }
-
-                    // Save to database
-                    database.soundDetectionDao().insertDetection(detection)
-                } else {
-                    // Label not found
-                }
+                processKnownSound(audioData, result, soundLabels)
             } else {
-                // No action needed for other cases
+                // Unknown sound detected - cluster by frequency and duration
+                processUnknownSound(audioData, result)
             }
         } catch (e: Exception) {
             Log.e("SoundDetectionService", "Error processing audio chunk", e)
         }
     }
 
-    suspend fun labelUnknownSound(labelName: String, useExistingLabel: Boolean = false, existingLabelId: Long? = null, detectionId: Long? = null) = withContext(Dispatchers.IO) {
-        // Get the detection to label - either from detectionId parameter or current detection
+    private suspend fun processPersonVoice(
+        audioData: ByteArray,
+        result: com.soundman.app.audio.MediaPipeDetectionResult,
+        personLabels: List<com.soundman.app.data.PersonLabel>
+    ) = withContext(Dispatchers.Default) {
+        val person = personLabels.find { it.id == result.personId }
+        if (person == null) return@withContext
+
+        // Get or assign person label (Person01, Person02, etc.)
+        val personLabelName = personIdMap.getOrPut(result.personId) {
+            val labelName = "Person%02d".format(nextPersonId++)
+            // Update person name if not already set
+            if (person.name.startsWith("Person")) {
+                database.personLabelDao().updatePerson(person.copy(name = labelName))
+            }
+            labelName
+        }
+
+        // Use Vosk for transcription
+        val transcriptionResult = voskRecognizer.recognize(audioData)
+        val transcription = transcriptionResult?.text?.takeIf { it.isNotBlank() }
+
+        // Update transcription in database
+        if (transcription != null) {
+            val updatedTranscription = if (person.transcription.isNullOrBlank()) {
+                transcription
+            } else {
+                "${person.transcription}\n[$personLabelName]: $transcription"
+            }
+            database.personLabelDao().updateTranscription(result.personId!!, updatedTranscription)
+        }
+
+        val detection = SoundDetection(
+            labelId = null,
+            labelName = personLabelName,
+            confidence = result.confidence,
+            audioData = audioData,
+            isPerson = true,
+            personId = result.personId,
+            transcription = transcription,
+            frequency = result.frequency,
+            duration = result.duration,
+            isActive = person.isActive
+        )
+        _currentDetection.value = detection
+
+        // Process audio output with person settings
+        if (person.isActive && !person.isMuted) {
+            val processedAudio = audioOutputProcessor.processAudio(
+                audioData,
+                null,
+                isPerson = true,
+                personVolumeMultiplier = person.volumeMultiplier
+            )
+            audioOutputProcessor.writeAudio(processedAudio)
+        }
+
+        // Update detection count
+        database.personLabelDao().incrementDetectionCount(result.personId!!)
+        database.soundDetectionDao().insertDetection(detection)
+    }
+
+    private suspend fun processKnownSound(
+        audioData: ByteArray,
+        result: com.soundman.app.audio.MediaPipeDetectionResult,
+        soundLabels: List<SoundLabel>
+    ) = withContext(Dispatchers.Default) {
+        val label = soundLabels.find { it.name == result.label }
+        if (label == null) return@withContext
+
+        val detection = SoundDetection(
+            labelId = label.id,
+            labelName = result.label,
+            confidence = result.confidence,
+            audioData = audioData,
+            isPerson = false,
+            frequency = result.frequency,
+            duration = result.duration,
+            isActive = label.isActive
+        )
+        _currentDetection.value = detection
+
+        // Process audio output with label settings
+        if (label.isActive && !label.isMuted && label.isRecording) {
+            val processedAudio = audioOutputProcessor.processAudio(
+                audioData,
+                label,
+                isPerson = false
+            )
+            audioOutputProcessor.writeAudio(processedAudio)
+        }
+
+        // Update detection count
+        database.soundLabelDao().incrementDetectionCount(label.id)
+        database.soundDetectionDao().insertDetection(detection)
+    }
+
+    private suspend fun processUnknownSound(
+        audioData: ByteArray,
+        result: com.soundman.app.audio.MediaPipeDetectionResult
+    ) = withContext(Dispatchers.Default) {
+        // Find or create cluster based on frequency and duration similarity
+        val clusterId = findOrCreateCluster(result.frequency ?: 0f, result.duration ?: 0L)
+        
+        _unknownSoundCount.value = _unknownSoundCount.value + 1
+
+        val detection = SoundDetection(
+            labelId = null,
+            labelName = null,
+            confidence = result.confidence,
+            audioData = audioData,
+            isPerson = false,
+            clusterId = clusterId,
+            frequency = result.frequency,
+            duration = result.duration,
+            isActive = false
+        )
+        _currentDetection.value = detection
+
+        // Save to database
+        database.soundDetectionDao().insertDetection(detection)
+    }
+
+    private suspend fun findOrCreateCluster(frequency: Float, duration: Long): String = withContext(Dispatchers.Default) {
+        val clusters = database.soundDetectionDao().getUnknownSoundClusters().first()
+        
+        // Find similar cluster (within 10% frequency and 20% duration)
+        for (cluster in clusters) {
+            if (cluster.clusterId != null && cluster.frequency != null && cluster.duration != null) {
+                val freqDiff = abs(cluster.frequency!! - frequency) / frequency.coerceAtLeast(1f)
+                val durDiff = abs(cluster.duration!! - duration).toFloat() / duration.coerceAtLeast(1L).toFloat()
+                
+                if (freqDiff < 0.1f && durDiff < 0.2f) {
+                    return@withContext cluster.clusterId!!
+                }
+            }
+        }
+        
+        // Create new cluster
+        "cluster_${System.currentTimeMillis()}_${frequency.toInt()}_${duration}"
+    }
+
+    suspend fun labelUnknownSound(
+        labelName: String,
+        useExistingLabel: Boolean = false,
+        existingLabelId: Long? = null,
+        detectionId: Long? = null
+    ) = withContext(Dispatchers.IO) {
         val currentDet = if (detectionId != null) {
             database.soundDetectionDao().getDetectionById(detectionId)
         } else {
@@ -172,17 +312,17 @@ class SoundDetectionService(private val context: Context) {
 
         val labelId: Long
         if (useExistingLabel && existingLabelId != null) {
-            // Use existing label
             labelId = existingLabelId
             val label = database.soundLabelDao().getLabelById(existingLabelId)
             if (label == null) return@withContext
         } else {
-            // Create new label
             val label = SoundLabel(
                 name = labelName,
                 detectionCount = 1,
                 confidenceThreshold = 0.7f,
-                volumeMultiplier = 1.0f
+                volumeMultiplier = 1.0f,
+                isActive = true,
+                isRecording = false
             )
             labelId = database.soundLabelDao().insertLabel(label)
         }
@@ -190,35 +330,24 @@ class SoundDetectionService(private val context: Context) {
         // Get all detections in the same cluster
         val clusterId = currentDet.clusterId
         val clusterDetections = if (clusterId != null) {
-            database.soundDetectionDao().getDetectionsByCluster(clusterId).first()
+            database.soundDetectionDao().getDetectionsByClusterSorted(clusterId)
         } else {
             listOf(currentDet)
         }
 
-        // Learn from all detections in the cluster
-        clusterDetections.forEach { detection ->
-            detection.audioData?.let { audioData ->
-                soundClassifier.learnSound(labelName, audioData)
-            }
-        }
-
-        // If using cluster, assign the whole cluster to the label
-        if (clusterId != null) {
-            val audioDataList = clusterDetections.mapNotNull { it.audioData }
-            soundClassifier.assignClusterToLabel(clusterId, labelName, audioDataList)
-        }
+        // Note: MediaPipe uses pre-trained models, so we don't need to "learn" sounds
+        // The classification will happen automatically based on the model
 
         // Update all detections in the cluster
         clusterDetections.forEach { detection ->
             val updatedDetection = detection.copy(
                 labelId = labelId,
                 labelName = labelName,
-                clusterId = null // Clear cluster ID as it's now labeled
+                clusterId = null
             )
             database.soundDetectionDao().updateDetection(updatedDetection)
         }
 
-        // Update current detection state if we're using the current detection
         if (detectionId == null) {
             val updatedDetection = currentDet.copy(
                 labelId = labelId,
@@ -229,7 +358,6 @@ class SoundDetectionService(private val context: Context) {
             _currentDetection.value = updatedDetection
             _unknownSoundCount.value = 0
         } else {
-            // If labeling a specific detection, just update the unknown count if needed
             val remainingUnknown = database.soundDetectionDao().getUnknownSoundClusters().first().size
             _unknownSoundCount.value = remainingUnknown
         }
@@ -243,19 +371,27 @@ class SoundDetectionService(private val context: Context) {
         val person = com.soundman.app.data.PersonLabel(
             name = personName,
             detectionCount = 1,
-            volumeMultiplier = 1.0f
+            volumeMultiplier = 1.0f,
+            isActive = true
         )
         val personId = database.personLabelDao().insertPerson(person)
 
         // Learn from current detection
         currentDet.audioData?.let { audioData ->
-            soundClassifier.learnPersonVoice(personId, personName, audioData)
+            mediaPipeClassifier.learnPersonVoice(personId, personName, audioData)
+        }
+
+        // Assign person label
+        val personLabelName = personIdMap.getOrPut(personId) {
+            val labelName = "Person%02d".format(nextPersonId++)
+            database.personLabelDao().updatePerson(person.copy(name = labelName))
+            labelName
         }
 
         // Update current detection
         val updatedDetection = currentDet.copy(
             personId = personId,
-            labelName = personName
+            labelName = personLabelName
         )
         database.soundDetectionDao().insertDetection(updatedDetection)
         _currentDetection.value = updatedDetection
@@ -265,14 +401,18 @@ class SoundDetectionService(private val context: Context) {
         labelId: Long,
         volumeMultiplier: Float,
         isMuted: Boolean,
-        reverseToneEnabled: Boolean
+        reverseToneEnabled: Boolean,
+        isActive: Boolean? = null,
+        isRecording: Boolean? = null
     ) = withContext(Dispatchers.IO) {
         val label = database.soundLabelDao().getLabelById(labelId)
         if (label != null) {
             val updated = label.copy(
                 volumeMultiplier = volumeMultiplier,
                 isMuted = isMuted,
-                reverseToneEnabled = reverseToneEnabled
+                reverseToneEnabled = reverseToneEnabled,
+                isActive = isActive ?: label.isActive,
+                isRecording = isRecording ?: label.isRecording
             )
             database.soundLabelDao().updateLabel(updated)
         }
@@ -281,13 +421,15 @@ class SoundDetectionService(private val context: Context) {
     suspend fun updatePersonSettings(
         personId: Long,
         volumeMultiplier: Float,
-        isMuted: Boolean
+        isMuted: Boolean,
+        isActive: Boolean? = null
     ) = withContext(Dispatchers.IO) {
         val person = database.personLabelDao().getPersonById(personId)
         if (person != null) {
             val updated = person.copy(
                 volumeMultiplier = volumeMultiplier,
-                isMuted = isMuted
+                isMuted = isMuted,
+                isActive = isActive ?: person.isActive
             )
             database.personLabelDao().updatePerson(updated)
         }
@@ -299,5 +441,17 @@ class SoundDetectionService(private val context: Context) {
 
     suspend fun getUnknownSoundClusters() = withContext(Dispatchers.IO) {
         database.soundDetectionDao().getUnknownSoundClusters().first()
+    }
+
+    suspend fun toggleSoundActive(labelId: Long, isActive: Boolean) = withContext(Dispatchers.IO) {
+        database.soundLabelDao().setActive(labelId, isActive)
+    }
+
+    suspend fun toggleSoundRecording(labelId: Long, isRecording: Boolean) = withContext(Dispatchers.IO) {
+        database.soundLabelDao().setRecording(labelId, isRecording)
+    }
+
+    suspend fun togglePersonActive(personId: Long, isActive: Boolean) = withContext(Dispatchers.IO) {
+        database.personLabelDao().setActive(personId, isActive)
     }
 }

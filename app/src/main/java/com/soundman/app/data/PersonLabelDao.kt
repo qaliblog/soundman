@@ -25,4 +25,10 @@ interface PersonLabelDao {
 
     @Query("UPDATE person_labels SET detectionCount = detectionCount + 1 WHERE id = :id")
     suspend fun incrementDetectionCount(id: Long)
+
+    @Query("UPDATE person_labels SET transcription = :transcription WHERE id = :id")
+    suspend fun updateTranscription(id: Long, transcription: String)
+
+    @Query("UPDATE person_labels SET isActive = :isActive WHERE id = :id")
+    suspend fun setActive(id: Long, isActive: Boolean)
 }
