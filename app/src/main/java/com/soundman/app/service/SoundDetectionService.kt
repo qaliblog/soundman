@@ -143,8 +143,8 @@ class SoundDetectionService(private val context: Context) {
             if (result.isPerson && result.personId != null) {
                 // Person voice detected - use Vosk for transcription
                 processPersonVoice(audioData, result, personLabels)
-            } else if (result.label != null && result.confidence > 0.3f) {
-                // Known sound detected
+            } else if (result.label != null && result.confidence > 0.1f) {
+                // Known sound detected (lowered threshold to 0.1f)
                 processKnownSound(audioData, result, soundLabels)
             } else {
                 // Unknown sound detected - cluster by frequency and duration
