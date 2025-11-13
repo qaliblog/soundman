@@ -24,6 +24,18 @@
 -dontwarn javax.lang.model.type.**
 -dontwarn javax.lang.model.util.**
 
-# Keep AutoValue shaded javapoet classes but allow removal of javax.lang.model references
+# Allow R8 to remove AutoValue shaded javapoet code that references javax.lang.model
+# These are only needed at compile time, not runtime
 -keep class autovalue.shaded.com.squareup.javapoet.** { *; }
 -dontwarn autovalue.shaded.com.squareup.javapoet.**
+
+# Allow removal of methods that reference missing javax.lang.model classes
+-assumenosideeffects class autovalue.shaded.com.squareup.javapoet.TypeName {
+    static *** get(javax.lang.model.type.TypeMirror, ...);
+}
+-assumenosideeffects class autovalue.shaded.com.squareup.javapoet.CodeBlock$Builder {
+    *** argToType(...);
+}
+-assumenosideeffects class autovalue.shaded.com.squareup.javapoet.AnnotationSpec {
+    *** build();
+}
