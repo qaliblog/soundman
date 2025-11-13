@@ -119,18 +119,27 @@ class VoskSpeechRecognizer(private val context: Context) {
                 return@withContext modelPath
             }
             
-            // Try to copy from assets
-            val assetPath = "vosk_models/${getModelAssetName(language)}"
-            try {
-                val assetManager = context.assets
-                val files = assetManager.list(assetPath)
-                if (files != null && files.isNotEmpty()) {
-                    modelDir.mkdirs()
-                    copyAssetDirectory(assetManager, assetPath, modelDir)
-                    return@withContext modelPath
+            // Try to copy from assets - check both possible directory names
+            val assetPath1 = "vosk_models/${getModelAssetName(language)}"
+            val assetPath2 = when (language) {
+                "fa" -> "vosk_models/vosk-model-fa-0.42" // Also check without "small"
+                else -> assetPath1
+            }
+            
+            for (assetPath in listOf(assetPath1, assetPath2)) {
+                try {
+                    val assetManager = context.assets
+                    val files = assetManager.list(assetPath)
+                    if (files != null && files.isNotEmpty()) {
+                        modelDir.mkdirs()
+                        copyAssetDirectory(assetManager, assetPath, modelDir)
+                        if (File(modelDir, "am").exists()) {
+                            return@withContext modelPath
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Try next path
                 }
-            } catch (e: Exception) {
-                Log.w("VoskSpeechRecognizer", "Model not in assets, will download", e)
             }
             
             // Download if not in assets
