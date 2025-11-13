@@ -17,3 +17,11 @@
 -keepclassmembers class * {
     @com.google.auto.value.AutoValue.Builder <methods>;
 }
+
+# Keep javax.lang.model classes needed by AutoValue's javapoet
+-keep class javax.lang.model.** { *; }
+-dontwarn javax.lang.model.**
+
+# Keep AutoValue shaded javapoet classes
+-keep class autovalue.shaded.com.squareup.javapoet.** { *; }
+-dontwarn autovalue.shaded.com.squareup.javapoet.**
