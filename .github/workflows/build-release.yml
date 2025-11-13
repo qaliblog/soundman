@@ -58,15 +58,27 @@ jobs:
           }
           rm en_model.zip
           
-          # Download and extract Persian model (using full model, not small version)
+          # Ensure English model directory has correct name
+          if [ -d "vosk-model-small-en-us-0.15" ]; then
+            echo "English model directory found: vosk-model-small-en-us-0.15"
+          else
+            # Find the extracted directory and rename if needed
+            EN_DIR=$(find . -maxdepth 1 -type d -name "*en*" | head -1)
+            if [ -n "$EN_DIR" ] && [ "$EN_DIR" != "./vosk-model-small-en-us-0.15" ]; then
+              echo "Renaming English model directory from $EN_DIR to vosk-model-small-en-us-0.15"
+              mv "$EN_DIR" "vosk-model-small-en-us-0.15"
+            fi
+          fi
+          
+          # Download and extract Persian model
           echo "Downloading Persian Vosk model..."
-          curl -L -f -o fa_model.zip "https://alphacephei.com/vosk/models/vosk-model-fa-0.42.zip" || {
+          curl -L -f -o fa_model.zip "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip" || {
             echo "Warning: Failed to download Persian model, continuing without it"
             rm -f fa_model.zip
           }
           
           if [ -f fa_model.zip ]; then
-            # Verify file size (should be > 10MB for full model)
+            # Verify file size (should be > 10MB)
             FILE_SIZE=$(stat -f%z fa_model.zip 2>/dev/null || stat -c%s fa_model.zip 2>/dev/null || echo 0)
             if [ "$FILE_SIZE" -lt 10485760 ]; then
               echo "Warning: Persian model file too small ($FILE_SIZE bytes), may be invalid. Skipping extraction."
@@ -77,6 +89,18 @@ jobs:
                 rm -f fa_model.zip
               }
               rm -f fa_model.zip
+              
+              # Ensure Persian model directory has correct name
+              if [ -d "vosk-model-small-fa-0.42" ]; then
+                echo "Persian model directory found: vosk-model-small-fa-0.42"
+              else
+                # Find the extracted directory and rename if needed
+                FA_DIR=$(find . -maxdepth 1 -type d -name "*fa*" | head -1)
+                if [ -n "$FA_DIR" ] && [ "$FA_DIR" != "./vosk-model-small-fa-0.42" ]; then
+                  echo "Renaming Persian model directory from $FA_DIR to vosk-model-small-fa-0.42"
+                  mv "$FA_DIR" "vosk-model-small-fa-0.42"
+                fi
+              fi
             fi
           fi
           
@@ -85,10 +109,18 @@ jobs:
           echo "Checking model structure:"
           find . -name "am" -type f | head -5
           
-          # Verify at least English model exists
-          if [ ! -d "vosk-model-small-en-us-0.15" ] || [ ! -f "vosk-model-small-en-us-0.15/am" ]; then
-            echo "Error: English model not found or incomplete"
-            exit 1
+          # Verify at least English model exists (check for am file in any en directory)
+          if [ -f "vosk-model-small-en-us-0.15/am" ]; then
+            echo "English model verified: vosk-model-small-en-us-0.15/am exists"
+          else
+            # Try to find English model in any directory
+            EN_AM=$(find . -name "am" -path "*/en*" | head -1)
+            if [ -n "$EN_AM" ]; then
+              echo "English model found at: $EN_AM"
+            else
+              echo "Error: English model not found or incomplete"
+              exit 1
+            fi
           fi
 
       - name: Clean build

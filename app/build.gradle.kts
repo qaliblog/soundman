@@ -76,7 +76,7 @@ tasks.register("downloadVoskModels") {
         models.forEach { (lang, url) ->
             val modelName = when (lang) {
                 "en" -> "vosk-model-small-en-us-0.15"
-                "fa" -> "vosk-model-fa-0.42"
+                "fa" -> "vosk-model-small-fa-0.42"
                 else -> "vosk-model-small-$lang"
             }
             val modelDir = File(assetsDir, modelName)
