@@ -41,21 +41,55 @@ jobs:
           
           # Download and extract English model
           echo "Downloading English Vosk model..."
-          curl -L -o en_model.zip "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
-          unzip -q en_model.zip
-          # Keep the directory structure as extracted
+          curl -L -f -o en_model.zip "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip" || {
+            echo "Failed to download English model"
+            exit 1
+          }
+          
+          # Verify file size (should be > 10MB)
+          if [ $(stat -f%z en_model.zip 2>/dev/null || stat -c%s en_model.zip 2>/dev/null || echo 0) -lt 10485760 ]; then
+            echo "Error: English model file too small, download may have failed"
+            exit 1
+          fi
+          
+          unzip -q en_model.zip || {
+            echo "Failed to extract English model"
+            exit 1
+          }
           rm en_model.zip
           
-          # Download and extract Persian model
+          # Download and extract Persian model (using full model, not small version)
           echo "Downloading Persian Vosk model..."
-          curl -L -o fa_model.zip "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.22.zip"
-          unzip -q fa_model.zip
-          rm fa_model.zip
+          curl -L -f -o fa_model.zip "https://alphacephei.com/vosk/models/vosk-model-fa-0.42.zip" || {
+            echo "Warning: Failed to download Persian model, continuing without it"
+            rm -f fa_model.zip
+          }
+          
+          if [ -f fa_model.zip ]; then
+            # Verify file size (should be > 10MB for full model)
+            FILE_SIZE=$(stat -f%z fa_model.zip 2>/dev/null || stat -c%s fa_model.zip 2>/dev/null || echo 0)
+            if [ "$FILE_SIZE" -lt 10485760 ]; then
+              echo "Warning: Persian model file too small ($FILE_SIZE bytes), may be invalid. Skipping extraction."
+              rm -f fa_model.zip
+            else
+              unzip -q fa_model.zip || {
+                echo "Warning: Failed to extract Persian model, continuing without it"
+                rm -f fa_model.zip
+              }
+              rm -f fa_model.zip
+            fi
+          fi
           
           echo "Vosk models downloaded successfully"
           ls -la
           echo "Checking model structure:"
           find . -name "am" -type f | head -5
+          
+          # Verify at least English model exists
+          if [ ! -d "vosk-model-small-en-us-0.15" ] || [ ! -f "vosk-model-small-en-us-0.15/am" ]; then
+            echo "Error: English model not found or incomplete"
+            exit 1
+          fi
 
       - name: Clean build
         run: ./gradlew clean
