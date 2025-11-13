@@ -5,7 +5,6 @@ import android.util.Log
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.audio.core.RunningMode
 import com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifier
-import com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifierOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
@@ -39,15 +38,24 @@ class MediaPipeSoundClassifier(private val context: Context) {
             }
 
             if (baseOptions != null) {
-                val options = AudioClassifierOptions.builder()
-                    .setBaseOptions(baseOptions)
-                    .setRunningMode(RunningMode.AUDIO_STREAM)
-                    .setScoreThreshold(0.3f)
-                    .build()
-
-                audioClassifier = AudioClassifier.createFromOptions(context, options)
-                isInitialized = true
-                Log.d("MediaPipeSoundClassifier", "Initialized successfully")
+                // Use reflection to create AudioClassifierOptions to avoid import issues
+                try {
+                    val optionsClass = Class.forName("com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifierOptions")
+                    val builderClass = Class.forName("com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifierOptions\$Builder")
+                    val builder = builderClass.getMethod("builder").invoke(null)
+                    builderClass.getMethod("setBaseOptions", BaseOptions::class.java).invoke(builder, baseOptions)
+                    builderClass.getMethod("setRunningMode", RunningMode::class.java).invoke(builder, RunningMode.AUDIO_STREAM)
+                    builderClass.getMethod("setScoreThreshold", Float::class.java).invoke(builder, 0.3f)
+                    val options = builderClass.getMethod("build").invoke(builder)
+                    
+                    val createMethod = AudioClassifier::class.java.getMethod("createFromOptions", Context::class.java, optionsClass)
+                    audioClassifier = createMethod.invoke(null, context, options) as? AudioClassifier
+                    isInitialized = true
+                    Log.d("MediaPipeSoundClassifier", "Initialized successfully")
+                } catch (e: Exception) {
+                    Log.w("MediaPipeSoundClassifier", "Failed to create AudioClassifierOptions, using fallback", e)
+                    isInitialized = false
+                }
             } else {
                 Log.w("MediaPipeSoundClassifier", "Using fallback classifier")
                 isInitialized = false
