@@ -183,8 +183,9 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-metadata:0.4.4")
     
     // AutoValue (required by TensorFlow Lite Support for R8/ProGuard)
-    implementation("com.google.auto.value:auto-value-annotations:1.10.4")
-    compileOnly("com.google.auto.value:auto-value:1.10.4")
+    // Use version 1.8.1 to match MediaPipe's requirement
+    implementation("com.google.auto.value:auto-value-annotations:1.8.1")
+    compileOnly("com.google.auto.value:auto-value:1.8.1")
     
     // Room Database
     implementation("androidx.room:room-runtime:2.6.1")
