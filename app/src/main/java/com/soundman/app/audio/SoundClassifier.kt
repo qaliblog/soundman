@@ -15,12 +15,14 @@ data class DetectionResult(
     val label: String?,
     val confidence: Float,
     val isPerson: Boolean = false,
-    val personId: Long? = null
+    val personId: Long? = null,
+    val clusterId: String? = null
 )
 
 class SoundClassifier(private val context: Context) {
     private val soundPatterns = mutableMapOf<String, MutableList<FloatArray>>()
     private val personVoicePatterns = mutableMapOf<Long, MutableList<FloatArray>>()
+    private val unknownSoundClusters = mutableMapOf<String, MutableList<FloatArray>>()
 
     suspend fun classifySound(
         audioData: ByteArray,
@@ -58,15 +60,18 @@ class SoundClassifier(private val context: Context) {
                     isPerson = false
                 )
             } else {
+                // Check if this unknown sound matches any existing cluster
+                val clusterId = findOrCreateCluster(features)
                 DetectionResult(
                     label = null,
                     confidence = 0f,
-                    isPerson = false
+                    isPerson = false,
+                    clusterId = clusterId
                 )
             }
         } catch (e: Exception) {
             Log.e("SoundClassifier", "Error classifying sound", e)
-            DetectionResult(null, 0f)
+            DetectionResult(null, 0f, false, null, null)
         }
     }
 
@@ -224,5 +229,42 @@ class SoundClassifier(private val context: Context) {
                 personId = it.first
             )
         }
+    }
+
+    fun findOrCreateCluster(features: FloatArray): String {
+        val clusterThreshold = 0.7f // Similarity threshold for clustering
+        
+        // Find the best matching cluster
+        for ((clusterId, clusterFeatures) in unknownSoundClusters) {
+            if (clusterFeatures.isNotEmpty()) {
+                val avgSimilarity = calculateSimilarity(features, clusterFeatures)
+                if (avgSimilarity > clusterThreshold) {
+                    // Add to existing cluster
+                    clusterFeatures.add(features)
+                    if (clusterFeatures.size > 20) {
+                        clusterFeatures.removeAt(0) // Keep only recent 20
+                    }
+                    return clusterId
+                }
+            }
+        }
+        
+        // Create new cluster
+        val newClusterId = "cluster_${unknownSoundClusters.size + 1}_${System.currentTimeMillis()}"
+        unknownSoundClusters[newClusterId] = mutableListOf(features)
+        return newClusterId
+    }
+
+    fun getClusterFeatures(clusterId: String): List<FloatArray>? {
+        return unknownSoundClusters[clusterId]
+    }
+
+    fun assignClusterToLabel(clusterId: String, labelName: String, audioDataList: List<ByteArray>) {
+        // Learn all sounds in the cluster with the new label
+        audioDataList.forEach { audioData ->
+            learnSound(labelName, audioData)
+        }
+        // Remove the cluster as it's now labeled
+        unknownSoundClusters.remove(clusterId)
     }
 }

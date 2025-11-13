@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [SoundLabel::class, PersonLabel::class, SoundDetection::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class SoundDatabase : RoomDatabase() {
@@ -25,7 +25,9 @@ abstract class SoundDatabase : RoomDatabase() {
                     context.applicationContext,
                     SoundDatabase::class.java,
                     "sound_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration() // For development - will clear data on schema change
+                .build()
                 INSTANCE = instance
                 instance
             }

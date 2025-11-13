@@ -37,9 +37,9 @@ class SoundDetectionViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    fun labelUnknownSound(labelName: String) {
+    fun labelUnknownSound(labelName: String, useExistingLabel: Boolean = false, existingLabelId: Long? = null) {
         viewModelScope.launch {
-            detectionService.labelUnknownSound(labelName)
+            detectionService.labelUnknownSound(labelName, useExistingLabel, existingLabelId)
         }
     }
 
@@ -77,5 +77,17 @@ class SoundDetectionViewModel(application: Application) : AndroidViewModel(appli
                 isMuted
             )
         }
+    }
+
+    val isLiveMicEnabled = detectionService.isLiveMicEnabled
+
+    fun setLiveMicEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            detectionService.setLiveMicEnabled(enabled)
+        }
+    }
+
+    suspend fun getUnknownSoundClusters(): List<com.soundman.app.data.SoundDetection> {
+        return detectionService.getUnknownSoundClusters()
     }
 }

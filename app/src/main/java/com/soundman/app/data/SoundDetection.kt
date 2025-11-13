@@ -13,7 +13,8 @@ data class SoundDetection(
     val timestamp: Long = System.currentTimeMillis(),
     val audioData: ByteArray? = null,
     val isPerson: Boolean = false,
-    val personId: Long? = null
+    val personId: Long? = null,
+    val clusterId: String? = null
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -32,6 +33,7 @@ data class SoundDetection(
         } else if (other.audioData != null) return false
         if (isPerson != other.isPerson) return false
         if (personId != other.personId) return false
+        if (clusterId != other.clusterId) return false
 
         return true
     }
@@ -45,6 +47,7 @@ data class SoundDetection(
         result = 31 * result + (audioData?.contentHashCode() ?: 0)
         result = 31 * result + isPerson.hashCode()
         result = 31 * result + (personId?.hashCode() ?: 0)
+        result = 31 * result + (clusterId?.hashCode() ?: 0)
         return result
     }
 }

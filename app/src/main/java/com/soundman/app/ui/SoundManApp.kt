@@ -23,10 +23,22 @@ fun SoundManApp(
     val unknownSoundCount by viewModel.unknownSoundCount.collectAsState()
     val soundLabels by viewModel.soundLabels.collectAsState(initial = emptyList())
     val personLabels by viewModel.personLabels.collectAsState(initial = emptyList())
+    val isLiveMicEnabled by viewModel.isLiveMicEnabled.collectAsState()
 
     var showLabelDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf<Any?>(null) }
     var selectedTab by remember { mutableStateOf(0) }
+    var selectedDetectionForLabel by remember { mutableStateOf<com.soundman.app.data.SoundDetection?>(null) }
+    
+    // Load unknown sound clusters
+    val unknownSoundClusters = remember { mutableStateListOf<com.soundman.app.data.SoundDetection>() }
+    
+    LaunchedEffect(Unit, unknownSoundCount) {
+        // Refresh clusters when unknown sounds are detected or on initial load
+        val clusters = viewModel.getUnknownSoundClusters()
+        unknownSoundClusters.clear()
+        unknownSoundClusters.addAll(clusters)
+    }
 
     Scaffold(
         topBar = {
@@ -129,6 +141,19 @@ fun SoundManApp(
                 }
             }
 
+            // Live Mic Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Live Mic Passthrough")
+                Switch(
+                    checked = isLiveMicEnabled,
+                    onCheckedChange = { viewModel.setLiveMicEnabled(it) }
+                )
+            }
+
             // Tabs
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
@@ -140,6 +165,21 @@ fun SoundManApp(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     text = { Text("People") }
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = { 
+                        Row {
+                            Text("Unknown")
+                            if (unknownSoundClusters.isNotEmpty()) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Badge {
+                                    Text(unknownSoundClusters.size.toString())
+                                }
+                            }
+                        }
+                    }
                 )
             }
 
@@ -153,23 +193,37 @@ fun SoundManApp(
                     personLabels = personLabels,
                     onSettingsClick = { showSettingsDialog = it }
                 )
+                2 -> UnknownSoundsList(
+                    unknownSoundClusters = unknownSoundClusters,
+                    onLabelClick = { detection, _, _ ->
+                        selectedDetectionForLabel = detection
+                        showLabelDialog = true
+                    }
+                )
             }
         }
     }
 
     // Label Dialog
     if (showLabelDialog) {
+        val detectionToLabel = selectedDetectionForLabel ?: currentDetection
         LabelDialog(
-            onDismiss = { showLabelDialog = false },
-            onConfirm = { labelName ->
-                if (currentDetection?.isPerson == true) {
+            onDismiss = { 
+                showLabelDialog = false
+                selectedDetectionForLabel = null
+            },
+            onConfirm = { labelName, useExisting, existingId ->
+                if (detectionToLabel?.isPerson == true) {
                     viewModel.labelPerson(labelName)
                 } else {
-                    viewModel.labelUnknownSound(labelName)
+                    viewModel.labelUnknownSound(labelName, useExisting, existingId)
                 }
                 showLabelDialog = false
+                selectedDetectionForLabel = null
+                // Refresh clusters after labeling - will be handled by LaunchedEffect
             },
-            isPerson = currentDetection?.isPerson == true
+            isPerson = detectionToLabel?.isPerson == true,
+            existingLabels = soundLabels
         )
     }
 

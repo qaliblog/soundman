@@ -32,6 +32,9 @@ class SoundDetectionService(private val context: Context) {
     private val _unknownSoundCount = MutableStateFlow(0)
     val unknownSoundCount: StateFlow<Int> = _unknownSoundCount.asStateFlow()
 
+    private val _isLiveMicEnabled = MutableStateFlow(false)
+    val isLiveMicEnabled: StateFlow<Boolean> = _isLiveMicEnabled.asStateFlow()
+
     private val scope = CoroutineScope(Dispatchers.Default)
 
     suspend fun startDetection() = withContext(Dispatchers.IO) {
@@ -53,7 +56,12 @@ class SoundDetectionService(private val context: Context) {
         scope.launch {
             audioProcessor.audioData.collect { audioData ->
                 if (audioData != null && _isDetecting.value) {
-                    processAudioChunk(audioData)
+                    // If live mic is enabled, pass through raw audio
+                    if (_isLiveMicEnabled.value) {
+                        audioOutputProcessor.writeAudio(audioData)
+                    } else {
+                        processAudioChunk(audioData)
+                    }
                 }
             }
         }
@@ -81,7 +89,8 @@ class SoundDetectionService(private val context: Context) {
                     labelName = null,
                     confidence = result.confidence,
                     audioData = audioData,
-                    isPerson = false
+                    isPerson = false,
+                    clusterId = result.clusterId
                 )
                 _currentDetection.value = detection
                 
@@ -123,14 +132,20 @@ class SoundDetectionService(private val context: Context) {
                         )
                     }
 
-                    // Write processed audio to output
-                    audioOutputProcessor.writeAudio(processedAudio)
+                    // Write processed audio to output (unless live mic is enabled)
+                    if (!_isLiveMicEnabled.value) {
+                        audioOutputProcessor.writeAudio(processedAudio)
+                    }
 
                     // Update detection count
                     if (result.isPerson) {
-                        database.personLabelDao().incrementDetectionCount(result.personId!!)
+                        result.personId?.let { personId ->
+                            database.personLabelDao().incrementDetectionCount(personId)
+                        }
                     } else {
-                        database.soundLabelDao().incrementDetectionCount((label as SoundLabel).id)
+                        (label as? SoundLabel)?.id?.let { labelId ->
+                            database.soundLabelDao().incrementDetectionCount(labelId)
+                        }
                     }
 
                     // Save to database
@@ -146,35 +161,65 @@ class SoundDetectionService(private val context: Context) {
         }
     }
 
-    suspend fun labelUnknownSound(labelName: String) = withContext(Dispatchers.IO) {
+    suspend fun labelUnknownSound(labelName: String, useExistingLabel: Boolean = false, existingLabelId: Long? = null) = withContext(Dispatchers.IO) {
         val currentDet = _currentDetection.value
         if (currentDet == null || currentDet.labelName != null) return@withContext
 
-        // Create new label
-        val label = SoundLabel(
-            name = labelName,
-            detectionCount = 1,
-            confidenceThreshold = 0.7f,
-            volumeMultiplier = 1.0f
-        )
-        val labelId = database.soundLabelDao().insertLabel(label)
+        val labelId: Long
+        if (useExistingLabel && existingLabelId != null) {
+            // Use existing label
+            labelId = existingLabelId
+            val label = database.soundLabelDao().getLabelById(existingLabelId)
+            if (label == null) return@withContext
+        } else {
+            // Create new label
+            val label = SoundLabel(
+                name = labelName,
+                detectionCount = 1,
+                confidenceThreshold = 0.7f,
+                volumeMultiplier = 1.0f
+            )
+            labelId = database.soundLabelDao().insertLabel(label)
+        }
 
-        // Learn from previous unknown detections
-        val allDetections = database.soundDetectionDao().getRecentDetections(100).first()
-        val unknownDetections = allDetections.filter { it.labelName == null }
+        // Get all detections in the same cluster
+        val clusterId = currentDet.clusterId
+        val clusterDetections = if (clusterId != null) {
+            database.soundDetectionDao().getDetectionsByCluster(clusterId).first()
+        } else {
+            listOf(currentDet)
+        }
 
-        unknownDetections.forEach { detection ->
+        // Learn from all detections in the cluster
+        clusterDetections.forEach { detection ->
             detection.audioData?.let { audioData ->
                 soundClassifier.learnSound(labelName, audioData)
             }
         }
 
+        // If using cluster, assign the whole cluster to the label
+        if (clusterId != null) {
+            val audioDataList = clusterDetections.mapNotNull { it.audioData }
+            soundClassifier.assignClusterToLabel(clusterId, labelName, audioDataList)
+        }
+
+        // Update all detections in the cluster
+        clusterDetections.forEach { detection ->
+            val updatedDetection = detection.copy(
+                labelId = labelId,
+                labelName = labelName,
+                clusterId = null // Clear cluster ID as it's now labeled
+            )
+            database.soundDetectionDao().updateDetection(updatedDetection)
+        }
+
         // Update current detection
         val updatedDetection = currentDet.copy(
             labelId = labelId,
-            labelName = labelName
+            labelName = labelName,
+            clusterId = null
         )
-        database.soundDetectionDao().insertDetection(updatedDetection)
+        database.soundDetectionDao().updateDetection(updatedDetection)
         _currentDetection.value = updatedDetection
         _unknownSoundCount.value = 0
     }
@@ -235,5 +280,13 @@ class SoundDetectionService(private val context: Context) {
             )
             database.personLabelDao().updatePerson(updated)
         }
+    }
+
+    suspend fun setLiveMicEnabled(enabled: Boolean) = withContext(Dispatchers.IO) {
+        _isLiveMicEnabled.value = enabled
+    }
+
+    suspend fun getUnknownSoundClusters() = withContext(Dispatchers.IO) {
+        database.soundDetectionDao().getUnknownSoundClusters().first()
     }
 }

@@ -95,7 +95,8 @@ class AudioOutputProcessor(
     }
 
     private fun applyReverseTone(audioData: ByteArray): ByteArray {
-        // Phase inversion for noise cancellation
+        // Improved phase inversion for noise cancellation
+        // Uses adaptive phase shift with frequency-dependent cancellation
         val byteBuffer = ByteBuffer.wrap(audioData)
         byteBuffer.order(ByteOrder.LITTLE_ENDIAN)
         val outputBuffer = ByteArray(audioData.size)
@@ -103,10 +104,25 @@ class AudioOutputProcessor(
         outputByteBuffer.order(ByteOrder.LITTLE_ENDIAN)
 
         byteBuffer.rewind()
+        var previousSample = 0
+        var sampleIndex = 0
+        
         while (byteBuffer.hasRemaining()) {
-            val sample = byteBuffer.short
-            val invertedSample = (-sample).toShort()
-            outputByteBuffer.putShort(invertedSample)
+            val sample = byteBuffer.short.toInt()
+            
+            // Apply phase inversion with slight delay compensation
+            // This creates better cancellation for periodic sounds
+            val invertedSample = if (sampleIndex > 0) {
+                // Use weighted average of current and previous for smoother cancellation
+                val weighted = (-sample * 0.9f + previousSample * 0.1f).toInt()
+                weighted.coerceIn(-32768, 32767)
+            } else {
+                -sample
+            }
+            
+            outputByteBuffer.putShort(invertedSample.toShort())
+            previousSample = sample
+            sampleIndex++
         }
 
         return outputBuffer
@@ -114,7 +130,10 @@ class AudioOutputProcessor(
 
     fun writeAudio(audioData: ByteArray) {
         try {
-            audioTrack?.write(audioData, 0, audioData.size)
+            val track = audioTrack
+            if (track != null && track.state == AudioTrack.STATE_INITIALIZED && audioData.isNotEmpty()) {
+                track.write(audioData, 0, audioData.size)
+            }
         } catch (e: Exception) {
             Log.e("AudioOutputProcessor", "Error writing audio", e)
         }

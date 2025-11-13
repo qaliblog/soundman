@@ -84,11 +84,30 @@ class AudioProcessor(
             // Start reading audio data in a separate thread
             Thread {
                 val buffer = ByteArray(bufferSize)
-                while (isRecording && audioRecord?.state == AudioRecord.STATE_INITIALIZED) {
-                    val bytesRead = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                    if (bytesRead > 0) {
-                        _audioData.value = buffer.copyOf(bytesRead)
-                        calculateAmplitude(buffer, bytesRead)
+                val record = audioRecord
+                if (record == null || record.state != AudioRecord.STATE_INITIALIZED) {
+                    Log.e("AudioProcessor", "AudioRecord is null or not initialized")
+                    return@Thread
+                }
+                
+                while (isRecording) {
+                    try {
+                        val currentRecord = audioRecord
+                        if (currentRecord == null || currentRecord.state != AudioRecord.STATE_INITIALIZED) {
+                            break
+                        }
+                        
+                        val bytesRead = currentRecord.read(buffer, 0, buffer.size)
+                        if (bytesRead > 0 && bytesRead <= buffer.size) {
+                            _audioData.value = buffer.copyOf(bytesRead)
+                            calculateAmplitude(buffer, bytesRead)
+                        } else if (bytesRead < 0) {
+                            Log.e("AudioProcessor", "Error reading audio: $bytesRead")
+                            break
+                        }
+                    } catch (e: Exception) {
+                        Log.e("AudioProcessor", "Error in audio reading thread", e)
+                        break
                     }
                 }
             }.start()
@@ -112,19 +131,33 @@ class AudioProcessor(
     }
 
     private fun calculateAmplitude(buffer: ByteArray, bytesRead: Int) {
-        var sum = 0.0
-        val samples = bytesRead / 2 // 16-bit samples
-        val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
-        byteBuffer.order(ByteOrder.LITTLE_ENDIAN)
+        try {
+            if (bytesRead <= 0 || bytesRead > buffer.size) return
+            
+            var sum = 0.0
+            val samples = bytesRead / 2 // 16-bit samples
+            if (samples <= 0) return
+            
+            val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
+            byteBuffer.order(ByteOrder.LITTLE_ENDIAN)
 
-        for (i in 0 until samples) {
-            val sample = byteBuffer.short.toDouble()
-            sum += abs(sample)
+            for (i in 0 until samples) {
+                if (byteBuffer.remaining() >= 2) {
+                    val sample = byteBuffer.short.toDouble()
+                    sum += abs(sample)
+                } else {
+                    break
+                }
+            }
+
+            if (samples > 0) {
+                val average = sum / samples
+                val amplitude = (average / Short.MAX_VALUE).toFloat().coerceIn(0f, 1f)
+                _amplitude.value = amplitude
+            }
+        } catch (e: Exception) {
+            Log.e("AudioProcessor", "Error calculating amplitude", e)
         }
-
-        val average = sum / samples
-        val amplitude = (average / Short.MAX_VALUE).toFloat().coerceIn(0f, 1f)
-        _amplitude.value = amplitude
     }
 
     fun getSampleRate(): Int = sampleRate

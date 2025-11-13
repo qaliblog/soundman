@@ -11,27 +11,93 @@ import com.soundman.app.data.SoundLabel
 @Composable
 fun LabelDialog(
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-    isPerson: Boolean
+    onConfirm: (String, Boolean, Long?) -> Unit,
+    isPerson: Boolean,
+    existingLabels: List<SoundLabel> = emptyList()
 ) {
     var labelName by remember { mutableStateOf("") }
+    var useExistingLabel by remember { mutableStateOf(false) }
+    var selectedLabelId by remember { mutableStateOf<Long?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (isPerson) "Label Person" else "Label Sound") },
         text = {
-            OutlinedTextField(
-                value = labelName,
-                onValueChange = { labelName = it },
-                label = { Text("Name") },
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (!isPerson && existingLabels.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Use existing label")
+                        Switch(
+                            checked = useExistingLabel,
+                            onCheckedChange = { 
+                                useExistingLabel = it
+                                if (!it) {
+                                    selectedLabelId = null
+                                    labelName = ""
+                                }
+                            }
+                        )
+                    }
+                    
+                    if (useExistingLabel) {
+                        // Show dropdown for existing labels
+                        var expanded by remember { mutableStateOf(false) }
+                        Box {
+                            OutlinedButton(
+                                onClick = { expanded = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = existingLabels.find { it.id == selectedLabelId }?.name 
+                                        ?: "Select existing label"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                existingLabels.forEach { label ->
+                                    DropdownMenuItem(
+                                        text = { Text(label.name) },
+                                        onClick = {
+                                            selectedLabelId = label.id
+                                            labelName = label.name
+                                            expanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = labelName,
+                            onValueChange = { labelName = it },
+                            label = { Text("New Label Name") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = labelName,
+                        onValueChange = { labelName = it },
+                        label = { Text("Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (labelName.isNotBlank()) {
-                        onConfirm(labelName)
+                    if (labelName.isNotBlank() || (useExistingLabel && selectedLabelId != null)) {
+                        onConfirm(labelName, useExistingLabel, selectedLabelId)
                     }
                 }
             ) {
