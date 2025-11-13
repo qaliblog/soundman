@@ -104,7 +104,7 @@ class VoskSpeechRecognizer(private val context: Context) {
         modelsDir.mkdirs()
         
         return when (language) {
-            "fa" -> File(modelsDir, "vosk-model-fa-0.42").absolutePath
+            "fa" -> File(modelsDir, "vosk-model-small-fa-0.42").absolutePath
             else -> File(modelsDir, "vosk-model-small-en-us-0.15").absolutePath
         }
     }
@@ -148,7 +148,7 @@ class VoskSpeechRecognizer(private val context: Context) {
     
     private fun getModelAssetName(language: String): String {
         return when (language) {
-            "fa" -> "vosk-model-fa-0.42"
+            "fa" -> "vosk-model-small-fa-0.42"
             else -> "vosk-model-small-en-us-0.15"
         }
     }
@@ -177,7 +177,7 @@ class VoskSpeechRecognizer(private val context: Context) {
     private suspend fun downloadModel(language: String) = withContext(Dispatchers.IO) {
         try {
             val modelUrl = when (language) {
-                "fa" -> "https://alphacephei.com/vosk/models/vosk-model-fa-0.42.zip"
+                "fa" -> "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip"
                 else -> "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
             }
 

@@ -70,7 +70,7 @@ tasks.register("downloadVoskModels") {
 
         val models = mapOf(
             "en" to "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
-            "fa" to "https://alphacephei.com/vosk/models/vosk-model-fa-0.42.zip"
+            "fa" to "https://alphacephei.com/vosk/models/vosk-model-small-fa-0.42.zip"
         )
 
         models.forEach { (lang, url) ->
