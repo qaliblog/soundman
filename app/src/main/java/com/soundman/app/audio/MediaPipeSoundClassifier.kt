@@ -24,6 +24,10 @@ class MediaPipeSoundClassifier(private val context: Context) {
     private var audioClassifier: AudioClassifier? = null
     private val personVoicePatterns = mutableMapOf<Long, MutableList<FloatArray>>()
     private var isInitialized = false
+    
+    // Buffer audio chunks to accumulate enough samples for MediaPipe (needs ~0.96 seconds)
+    private val audioBuffer = mutableListOf<Float>()
+    private val requiredSamples = (16000 * 0.96f).toInt() // ~15360 samples at 16kHz
 
     suspend fun initialize() = withContext(Dispatchers.IO) {
         try {
@@ -79,33 +83,51 @@ class MediaPipeSoundClassifier(private val context: Context) {
 
     suspend fun classifySound(
         audioData: ByteArray,
-        sampleRate: Int = 16000,
+        sampleRate: Int = 44100, // Default is 44100, but MediaPipe needs 16kHz
         personLabels: List<com.soundman.app.data.PersonLabel>
     ): MediaPipeDetectionResult = withContext(Dispatchers.Default) {
         try {
-            // Convert audio to float array
+            // Convert audio to float array and resample to 16kHz if needed
             val floatSamples = convertToFloatArray(audioData, sampleRate)
+            val resampledSamples = if (sampleRate != 16000) {
+                resampleAudio(floatSamples, sampleRate, 16000)
+            } else {
+                floatSamples
+            }
             
-            // Check for person voice first using custom detection
+            // Add to buffer
+            audioBuffer.addAll(resampledSamples.toList())
+            
+            // Keep buffer size manageable (keep last 2 seconds)
+            val maxBufferSize = 16000 * 2
+            if (audioBuffer.size > maxBufferSize) {
+                audioBuffer.removeAt(0)
+            }
+            
+            // Check for person voice first using custom detection (use original samples)
             val personResult = detectPersonVoice(floatSamples, personLabels)
             if (personResult != null) {
                 return@withContext personResult
             }
 
             // Use MediaPipe AudioClassifier for sound classification
-            if (isInitialized && audioClassifier != null) {
+            // Only classify when we have enough samples
+            if (isInitialized && audioClassifier != null && audioBuffer.size >= requiredSamples) {
                 try {
-                    // MediaPipe needs at least 0.96 seconds of audio (15600 samples at 16kHz)
-                    // If audio is too short, pad it or skip classification
-                    val minSamples = (sampleRate * 0.96f).toInt()
-                    if (floatSamples.size < minSamples) {
-                        Log.d("MediaPipeSoundClassifier", "Audio too short (${floatSamples.size} samples), need at least $minSamples")
-                        // Fall through to unknown
-                    } else {
+                    // Use the buffered audio for classification
+                    val bufferArray = audioBuffer.take(requiredSamples).toFloatArray()
+                    
                         // Use reflection to call classify method
-                        // MediaPipe AudioClassifier.classify() expects FloatArray and sample rate
+                        // MediaPipe AudioClassifier.classify() expects FloatArray and sample rate (16kHz)
                         val classifyMethod = audioClassifier!!::class.java.getMethod("classify", FloatArray::class.java, Int::class.java)
-                        val result = classifyMethod.invoke(audioClassifier, floatSamples, sampleRate)
+                        val result = classifyMethod.invoke(audioClassifier, bufferArray, 16000)
+                        
+                        // Remove processed samples from buffer (keep some overlap)
+                        val overlapSamples = 1600 // 0.1 seconds overlap
+                        val samplesToRemove = (requiredSamples - overlapSamples).coerceAtMost(audioBuffer.size)
+                        repeat(samplesToRemove) {
+                            if (audioBuffer.isNotEmpty()) audioBuffer.removeAt(0)
+                        }
                         
                         if (result != null) {
                             // Get classifications from result using reflection
