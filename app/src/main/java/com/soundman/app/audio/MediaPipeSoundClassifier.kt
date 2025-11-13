@@ -27,18 +27,26 @@ class MediaPipeSoundClassifier(private val context: Context) {
 
     suspend fun initialize() = withContext(Dispatchers.IO) {
         try {
-            // Try to use YAMNet model from assets, fallback if not available
+            // Use MediaPipe's built-in YAMNet model
+            // The model is bundled with the MediaPipe library
             val baseOptions = try {
                 BaseOptions.builder()
                     .setModelAssetPath("yamnet.tflite")
                     .build()
             } catch (e: Exception) {
-                Log.w("MediaPipeSoundClassifier", "YAMNet model not found, using fallback", e)
-                null
+                // If model not in assets, try to use default model path
+                try {
+                    BaseOptions.builder()
+                        .setModelAssetPath("models/yamnet.tflite")
+                        .build()
+                } catch (e2: Exception) {
+                    Log.w("MediaPipeSoundClassifier", "YAMNet model not found, will use fallback", e2)
+                    null
+                }
             }
 
             if (baseOptions != null) {
-                // Use reflection to create AudioClassifierOptions to avoid import issues
+                // Use reflection to create AudioClassifierOptions
                 try {
                     val optionsClass = Class.forName("com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifierOptions")
                     val builderClass = Class.forName("com.google.mediapipe.tasks.audio.audioclassifier.AudioClassifierOptions\$Builder")
@@ -51,13 +59,13 @@ class MediaPipeSoundClassifier(private val context: Context) {
                     val createMethod = AudioClassifier::class.java.getMethod("createFromOptions", Context::class.java, optionsClass)
                     audioClassifier = createMethod.invoke(null, context, options) as? AudioClassifier
                     isInitialized = true
-                    Log.d("MediaPipeSoundClassifier", "Initialized successfully")
+                    Log.d("MediaPipeSoundClassifier", "MediaPipe AudioClassifier initialized successfully with YAMNet model")
                 } catch (e: Exception) {
                     Log.w("MediaPipeSoundClassifier", "Failed to create AudioClassifierOptions, using fallback", e)
                     isInitialized = false
                 }
             } else {
-                Log.w("MediaPipeSoundClassifier", "Using fallback classifier")
+                Log.w("MediaPipeSoundClassifier", "Using fallback classifier - YAMNet model not available")
                 isInitialized = false
             }
         } catch (e: Exception) {
@@ -81,16 +89,59 @@ class MediaPipeSoundClassifier(private val context: Context) {
                 return@withContext personResult
             }
 
-            // Use MediaPipe for sound classification if available
-            // Note: MediaPipe AudioClassifier API may require different input format
-            // For now, we'll use fallback classification until MediaPipe is properly configured
+            // Use MediaPipe AudioClassifier for sound classification
             if (isInitialized && audioClassifier != null) {
                 try {
-                    // MediaPipe AudioClassifier requires AudioData object
-                    // This is a simplified implementation - full implementation would need proper AudioData construction
-                    Log.d("MediaPipeSoundClassifier", "MediaPipe classifier available but using fallback for now")
+                    // Use reflection to call classify method
+                    // MediaPipe AudioClassifier.classify() expects FloatArray and sample rate
+                    val classifyMethod = audioClassifier!!::class.java.getMethod("classify", FloatArray::class.java, Int::class.java)
+                    val result = classifyMethod.invoke(audioClassifier, floatSamples, sampleRate)
+                    
+                    if (result != null) {
+                        // Get classifications from result using reflection
+                        val resultClass = result::class.java
+                        val classificationsMethod = resultClass.getMethod("getClassifications")
+                        val classifications = classificationsMethod.invoke(result) as? List<*>
+                        
+                        if (classifications != null && classifications.isNotEmpty()) {
+                            val topClassification = classifications[0]
+                            val classificationClass = topClassification!!::class.java
+                            
+                            // Get categories
+                            val categoriesMethod = classificationClass.getMethod("getCategories")
+                            val categories = categoriesMethod.invoke(topClassification) as? List<*>
+                            
+                            if (categories != null && categories.isNotEmpty()) {
+                                val topCategory = categories[0]
+                                val categoryClass = topCategory!!::class.java
+                                
+                                // Get category name and score
+                                val categoryNameMethod = categoryClass.getMethod("getCategoryName")
+                                val scoreMethod = categoryClass.getMethod("getScore")
+                                
+                                val label = categoryNameMethod.invoke(topCategory) as? String
+                                val score = (scoreMethod.invoke(topCategory) as? Number)?.toFloat() ?: 0f
+                                
+                                // Only accept if confidence is above threshold and not a person sound
+                                if (label != null && score > 0.3f && !isPersonSound(label)) {
+                                    val frequency = extractFrequency(floatSamples, sampleRate)
+                                    val duration = (audioData.size / 2.0 / sampleRate * 1000).toLong()
+
+                                    Log.d("MediaPipeSoundClassifier", "Detected sound: $label (confidence: $score)")
+                                    return@withContext MediaPipeDetectionResult(
+                                        label = label,
+                                        confidence = score,
+                                        isPerson = false,
+                                        frequency = frequency,
+                                        duration = duration
+                                    )
+                                }
+                            }
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.e("MediaPipeSoundClassifier", "Error in MediaPipe classification", e)
+                    // Fall through to unknown sound
                 }
             }
 
@@ -113,7 +164,12 @@ class MediaPipeSoundClassifier(private val context: Context) {
 
     private fun isPersonSound(label: String): Boolean {
         // Filter out human speech sounds from MediaPipe results
-        val personKeywords = listOf("Speech", "Human", "Voice", "Speaking", "Talk", "Conversation")
+        // YAMNet model classifies speech-related sounds, we want to handle those separately
+        val personKeywords = listOf(
+            "Speech", "Human", "Voice", "Speaking", "Talk", "Conversation",
+            "Human voice", "Speech", "Narration, monologue", "Conversation",
+            "Whispering", "Child speech, kid speaking", "Babbling"
+        )
         return personKeywords.any { label.contains(it, ignoreCase = true) }
     }
 
