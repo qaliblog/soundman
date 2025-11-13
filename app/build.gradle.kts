@@ -184,8 +184,14 @@ dependencies {
     
     // AutoValue (required by TensorFlow Lite Support for R8/ProGuard)
     // Use version 1.8.1 to match MediaPipe's requirement
+    // Use compileOnly for auto-value to avoid runtime dependencies on javax.lang.model
     implementation("com.google.auto.value:auto-value-annotations:1.8.1")
     compileOnly("com.google.auto.value:auto-value:1.8.1")
+    
+    // Exclude javax.lang.model from AutoValue if it's pulled in transitively
+    configurations.all {
+        exclude(group = "javax.lang.model", module = "*")
+    }
     
     // Room Database
     implementation("androidx.room:room-runtime:2.6.1")

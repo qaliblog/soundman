@@ -18,10 +18,12 @@
     @com.google.auto.value.AutoValue.Builder <methods>;
 }
 
-# Keep javax.lang.model classes needed by AutoValue's javapoet
--keep class javax.lang.model.** { *; }
+# Suppress warnings for javax.lang.model (not available on Android, only compile-time)
 -dontwarn javax.lang.model.**
+-dontwarn javax.lang.model.element.**
+-dontwarn javax.lang.model.type.**
+-dontwarn javax.lang.model.util.**
 
-# Keep AutoValue shaded javapoet classes
+# Keep AutoValue shaded javapoet classes but allow removal of javax.lang.model references
 -keep class autovalue.shaded.com.squareup.javapoet.** { *; }
 -dontwarn autovalue.shaded.com.squareup.javapoet.**
