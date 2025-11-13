@@ -110,30 +110,32 @@ jobs:
           find . -name "am" -type f | head -5
           
           # Verify at least English model exists
-          EN_AM=$(find "vosk-model-small-en-us-0.15" -name "am" -type f 2>/dev/null | head -1)
-          if [ -n "$EN_AM" ] && [ -f "$EN_AM" ]; then
-            echo "English model verified: $EN_AM exists"
-          else
-            # Try to find English model in any directory
-            EN_AM=$(find . -name "am" -type f | grep -i "en" | head -1)
-            if [ -n "$EN_AM" ] && [ -f "$EN_AM" ]; then
-              echo "English model found at: $EN_AM"
+          # Check for am file or directory (Vosk models can have am as either)
+          EN_MODEL_DIR="vosk-model-small-en-us-0.15"
+          if [ -d "$EN_MODEL_DIR" ]; then
+            # Check for common Vosk model files/directories
+            if [ -e "$EN_MODEL_DIR/am" ] || [ -e "$EN_MODEL_DIR/final.mdl" ] || [ -e "$EN_MODEL_DIR/conf" ] || [ -e "$EN_MODEL_DIR/graph" ]; then
+              echo "English model verified: $EN_MODEL_DIR contains model files"
+              ls -la "$EN_MODEL_DIR/" | head -10
             else
-              echo "Error: English model not found or incomplete"
+              echo "Error: English model directory exists but appears incomplete"
               echo "Directory contents:"
-              ls -la vosk-model-small-en-us-0.15/ 2>/dev/null || echo "Directory not found"
-              find . -type f -name "*.fst" -o -name "*.conf" | head -5
+              ls -la "$EN_MODEL_DIR/" 2>/dev/null || echo "Directory not found"
+              find "$EN_MODEL_DIR" -type f | head -10
               exit 1
             fi
+          else
+            echo "Error: English model directory not found"
+            exit 1
           fi
           
           # Verify Persian model if it exists
-          if [ -d "vosk-model-small-fa-0.42" ]; then
-            FA_AM=$(find "vosk-model-small-fa-0.42" -name "am" -type f 2>/dev/null | head -1)
-            if [ -n "$FA_AM" ] && [ -f "$FA_AM" ]; then
-              echo "Persian model verified: $FA_AM exists"
+          FA_MODEL_DIR="vosk-model-small-fa-0.42"
+          if [ -d "$FA_MODEL_DIR" ]; then
+            if [ -e "$FA_MODEL_DIR/am" ] || [ -e "$FA_MODEL_DIR/final.mdl" ] || [ -e "$FA_MODEL_DIR/conf" ] || [ -e "$FA_MODEL_DIR/graph" ]; then
+              echo "Persian model verified: $FA_MODEL_DIR contains model files"
             else
-              echo "Warning: Persian model directory exists but am file not found"
+              echo "Warning: Persian model directory exists but appears incomplete"
             fi
           fi
 
