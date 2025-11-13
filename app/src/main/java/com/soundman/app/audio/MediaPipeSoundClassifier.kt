@@ -117,72 +117,71 @@ class MediaPipeSoundClassifier(private val context: Context) {
                     // Use the buffered audio for classification
                     val bufferArray = audioBuffer.take(requiredSamples).toFloatArray()
                     
-                        // Use reflection to call classify method
-                        // MediaPipe AudioClassifier.classify() expects FloatArray and sample rate (16kHz)
-                        val classifyMethod = audioClassifier!!::class.java.getMethod("classify", FloatArray::class.java, Int::class.java)
-                        val result = classifyMethod.invoke(audioClassifier, bufferArray, 16000)
+                    // Use reflection to call classify method
+                    // MediaPipe AudioClassifier.classify() expects FloatArray and sample rate (16kHz)
+                    val classifyMethod = audioClassifier!!::class.java.getMethod("classify", FloatArray::class.java, Int::class.java)
+                    val result = classifyMethod.invoke(audioClassifier, bufferArray, 16000)
+                    
+                    // Remove processed samples from buffer (keep some overlap)
+                    val overlapSamples = 1600 // 0.1 seconds overlap
+                    val samplesToRemove = (requiredSamples - overlapSamples).coerceAtMost(audioBuffer.size)
+                    repeat(samplesToRemove) {
+                        if (audioBuffer.isNotEmpty()) audioBuffer.removeAt(0)
+                    }
+                    
+                    if (result != null) {
+                        // Get classifications from result using reflection
+                        val resultClass = result::class.java
+                        val classificationsMethod = resultClass.getMethod("getClassifications")
+                        val classifications = classificationsMethod.invoke(result) as? List<*>
                         
-                        // Remove processed samples from buffer (keep some overlap)
-                        val overlapSamples = 1600 // 0.1 seconds overlap
-                        val samplesToRemove = (requiredSamples - overlapSamples).coerceAtMost(audioBuffer.size)
-                        repeat(samplesToRemove) {
-                            if (audioBuffer.isNotEmpty()) audioBuffer.removeAt(0)
-                        }
-                        
-                        if (result != null) {
-                            // Get classifications from result using reflection
-                            val resultClass = result::class.java
-                            val classificationsMethod = resultClass.getMethod("getClassifications")
-                            val classifications = classificationsMethod.invoke(result) as? List<*>
+                        if (classifications != null && classifications.isNotEmpty()) {
+                            val topClassification = classifications[0]
+                            val classificationClass = topClassification!!::class.java
                             
-                            if (classifications != null && classifications.isNotEmpty()) {
-                                val topClassification = classifications[0]
-                                val classificationClass = topClassification!!::class.java
+                            // Get categories
+                            val categoriesMethod = classificationClass.getMethod("getCategories")
+                            val categories = categoriesMethod.invoke(topClassification) as? List<*>
+                            
+                            if (categories != null && categories.isNotEmpty()) {
+                                // Get top category
+                                val topCategory = categories[0]
+                                val categoryClass = topCategory!!::class.java
                                 
-                                // Get categories
-                                val categoriesMethod = classificationClass.getMethod("getCategories")
-                                val categories = categoriesMethod.invoke(topClassification) as? List<*>
+                                // Get category name and score
+                                val categoryNameMethod = categoryClass.getMethod("getCategoryName")
+                                val scoreMethod = categoryClass.getMethod("getScore")
                                 
-                                if (categories != null && categories.isNotEmpty()) {
-                                    // Get top category
-                                    val topCategory = categories[0]
-                                    val categoryClass = topCategory!!::class.java
-                                    
-                                    // Get category name and score
-                                    val categoryNameMethod = categoryClass.getMethod("getCategoryName")
-                                    val scoreMethod = categoryClass.getMethod("getScore")
-                                    
-                                    val label = categoryNameMethod.invoke(topCategory) as? String
-                                    val score = (scoreMethod.invoke(topCategory) as? Number)?.toFloat() ?: 0f
-                                    
-                                    Log.d("MediaPipeSoundClassifier", "MediaPipe detected: $label (confidence: $score)")
-                                    
-                                    // Lower threshold to 0.1f to detect more sounds
-                                    // Only filter out person sounds
-                                    if (label != null && score > 0.1f && !isPersonSound(label)) {
-                                        val frequency = extractFrequency(floatSamples, sampleRate)
-                                        val duration = (audioData.size / 2.0 / sampleRate * 1000).toLong()
+                                val label = categoryNameMethod.invoke(topCategory) as? String
+                                val score = (scoreMethod.invoke(topCategory) as? Number)?.toFloat() ?: 0f
+                                
+                                Log.d("MediaPipeSoundClassifier", "MediaPipe detected: $label (confidence: $score)")
+                                
+                                // Lower threshold to 0.1f to detect more sounds
+                                // Only filter out person sounds
+                                if (label != null && score > 0.1f && !isPersonSound(label)) {
+                                    val frequency = extractFrequency(floatSamples, sampleRate)
+                                    val duration = (audioData.size / 2.0 / sampleRate * 1000).toLong()
 
-                                        Log.i("MediaPipeSoundClassifier", "Accepted sound: $label (confidence: $score)")
-                                        return@withContext MediaPipeDetectionResult(
-                                            label = label,
-                                            confidence = score,
-                                            isPerson = false,
-                                            frequency = frequency,
-                                            duration = duration
-                                        )
-                                    } else if (label != null) {
-                                        Log.d("MediaPipeSoundClassifier", "Rejected sound: $label (score: $score, isPerson: ${isPersonSound(label)})")
-                                    }
-                                } else {
-                                    Log.d("MediaPipeSoundClassifier", "No categories in classification result")
+                                    Log.i("MediaPipeSoundClassifier", "Accepted sound: $label (confidence: $score)")
+                                    return@withContext MediaPipeDetectionResult(
+                                        label = label,
+                                        confidence = score,
+                                        isPerson = false,
+                                        frequency = frequency,
+                                        duration = duration
+                                    )
+                                } else if (label != null) {
+                                    Log.d("MediaPipeSoundClassifier", "Rejected sound: $label (score: $score, isPerson: ${isPersonSound(label)})")
                                 }
                             } else {
-                                Log.d("MediaPipeSoundClassifier", "No classifications in result")
+                                Log.d("MediaPipeSoundClassifier", "No categories in classification result")
                             }
                         } else {
-                            Log.d("MediaPipeSoundClassifier", "Classification result is null")
+                            Log.d("MediaPipeSoundClassifier", "No classifications in result")
                         }
+                    } else {
+                        Log.d("MediaPipeSoundClassifier", "Classification result is null")
                     }
                 } catch (e: Exception) {
                     Log.e("MediaPipeSoundClassifier", "Error in MediaPipe classification", e)
