@@ -216,7 +216,7 @@ fun SoundManApp(
                 if (detectionToLabel?.isPerson == true) {
                     viewModel.labelPerson(labelName)
                 } else {
-                    viewModel.labelUnknownSound(labelName, useExisting, existingId)
+                    viewModel.labelUnknownSound(labelName, useExisting, existingId, detectionToLabel?.id)
                 }
                 showLabelDialog = false
                 selectedDetectionForLabel = null

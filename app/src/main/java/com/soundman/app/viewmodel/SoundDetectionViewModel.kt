@@ -37,9 +37,9 @@ class SoundDetectionViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    fun labelUnknownSound(labelName: String, useExistingLabel: Boolean = false, existingLabelId: Long? = null) {
+    fun labelUnknownSound(labelName: String, useExistingLabel: Boolean = false, existingLabelId: Long? = null, detectionId: Long? = null) {
         viewModelScope.launch {
-            detectionService.labelUnknownSound(labelName, useExistingLabel, existingLabelId)
+            detectionService.labelUnknownSound(labelName, useExistingLabel, existingLabelId, detectionId)
         }
     }
 

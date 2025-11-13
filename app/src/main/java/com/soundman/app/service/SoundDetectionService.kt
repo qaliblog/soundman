@@ -161,8 +161,13 @@ class SoundDetectionService(private val context: Context) {
         }
     }
 
-    suspend fun labelUnknownSound(labelName: String, useExistingLabel: Boolean = false, existingLabelId: Long? = null) = withContext(Dispatchers.IO) {
-        val currentDet = _currentDetection.value
+    suspend fun labelUnknownSound(labelName: String, useExistingLabel: Boolean = false, existingLabelId: Long? = null, detectionId: Long? = null) = withContext(Dispatchers.IO) {
+        // Get the detection to label - either from detectionId parameter or current detection
+        val currentDet = if (detectionId != null) {
+            database.soundDetectionDao().getDetectionById(detectionId)
+        } else {
+            _currentDetection.value
+        }
         if (currentDet == null || currentDet.labelName != null) return@withContext
 
         val labelId: Long
@@ -213,15 +218,21 @@ class SoundDetectionService(private val context: Context) {
             database.soundDetectionDao().updateDetection(updatedDetection)
         }
 
-        // Update current detection
-        val updatedDetection = currentDet.copy(
-            labelId = labelId,
-            labelName = labelName,
-            clusterId = null
-        )
-        database.soundDetectionDao().updateDetection(updatedDetection)
-        _currentDetection.value = updatedDetection
-        _unknownSoundCount.value = 0
+        // Update current detection state if we're using the current detection
+        if (detectionId == null) {
+            val updatedDetection = currentDet.copy(
+                labelId = labelId,
+                labelName = labelName,
+                clusterId = null
+            )
+            database.soundDetectionDao().updateDetection(updatedDetection)
+            _currentDetection.value = updatedDetection
+            _unknownSoundCount.value = 0
+        } else {
+            // If labeling a specific detection, just update the unknown count if needed
+            val remainingUnknown = database.soundDetectionDao().getUnknownSoundClusters().first().size
+            _unknownSoundCount.value = remainingUnknown
+        }
     }
 
     suspend fun labelPerson(personName: String) = withContext(Dispatchers.IO) {
