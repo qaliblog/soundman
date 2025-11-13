@@ -2,9 +2,6 @@ package com.soundman.app.audio
 
 import android.content.Context
 import android.util.Log
-// Vosk Android library imports - package may vary by version
-// Try alternative package names if this doesn't work
-@file:Suppress("UNUSED_IMPORT")
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -86,10 +83,13 @@ class VoskSpeechRecognizer(private val context: Context) {
                 return@withContext null
             }
 
-            val result = recognizer?.acceptWaveform(audioData, audioData.size)
+            // Use reflection to call Vosk methods
+            val acceptMethod = recognizer!!::class.java.getMethod("acceptWaveform", ByteArray::class.java, Int::class.java)
+            val result = acceptMethod.invoke(recognizer, audioData, audioData.size) as? Boolean
             
             if (result == true) {
-                val jsonResult = recognizer?.result
+                val resultMethod = recognizer!!::class.java.getMethod("getResult")
+                val jsonResult = resultMethod.invoke(recognizer) as? String
                 val text = parseJsonResult(jsonResult)
                 return@withContext TranscriptionResult(
                     text = text,
@@ -97,7 +97,8 @@ class VoskSpeechRecognizer(private val context: Context) {
                     confidence = 1.0f
                 )
             } else {
-                val partialResult = recognizer?.partialResult
+                val partialMethod = recognizer!!::class.java.getMethod("getPartialResult")
+                val partialResult = partialMethod.invoke(recognizer) as? String
                 val text = parseJsonResult(partialResult)
                 if (text.isNotBlank()) {
                     return@withContext TranscriptionResult(
@@ -245,10 +246,20 @@ class VoskSpeechRecognizer(private val context: Context) {
     }
 
     fun release() {
-        recognizer?.close()
-        recognizer = null
-        model?.close()
-        model = null
-        isInitialized = false
+        try {
+            recognizer?.let {
+                val closeMethod = it::class.java.getMethod("close")
+                closeMethod.invoke(it)
+            }
+            recognizer = null
+            model?.let {
+                val closeMethod = it::class.java.getMethod("close")
+                closeMethod.invoke(it)
+            }
+            model = null
+            isInitialized = false
+        } catch (e: Exception) {
+            Log.e("VoskSpeechRecognizer", "Error releasing resources", e)
+        }
     }
 }
